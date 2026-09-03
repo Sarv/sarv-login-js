@@ -59,7 +59,11 @@ npm install @sarv-in/login
 ### Or a single script tag — no build step
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@sarv-in/login/dist/sarv-login.min.js"></script>
+<script
+  src="https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.0/dist/sarv-login.min.js"
+  integrity="sha384-mCXp3KveOj2R6Z8xU4GXstQn/9cA95o7wd1xlLIZAmaKQdJSih0YKzfC+q+cm3SO"
+  crossorigin="anonymous"
+></script>
 
 <sarv-login-button
   client-id="YOUR_CLIENT_ID"
@@ -67,9 +71,22 @@ npm install @sarv-in/login
 ></sarv-login-button>
 ```
 
-unpkg works the same: `https://unpkg.com/@sarv-in/login/dist/sarv-login.min.js`.
-Pin a version in production — `@sarv-in/login@1.0.0` — so a release cannot change
-your page without you shipping anything.
+The version is pinned and the `integrity` hash is the published file's, so the
+browser refuses the script if a single byte of it ever differs — that is what
+makes loading a login button from someone else's CDN acceptable. Both are worth
+copying exactly; an unpinned URL means a release of ours can change your page
+without you shipping anything, and without the hash a compromised CDN could
+serve a button that redirects elsewhere.
+
+unpkg serves the identical bytes, so the same hash works there:
+`https://unpkg.com/@sarv-in/login@1.0.0/dist/sarv-login.min.js`. The hash for
+any release is reproducible from the published tarball:
+
+```bash
+curl -sL https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.0/dist/sarv-login.min.js \
+  | openssl dgst -sha384 -binary | openssl base64 -A
+# mCXp3KveOj2R6Z8xU4GXstQn/9cA95o7wd1xlLIZAmaKQdJSih0YKzfC+q+cm3SO
+```
 
 Self-hosted alternative, on the same origin as the authorization server — for
 a network that blocks public CDNs, or a security review that forbids them:
@@ -95,7 +112,11 @@ The script registers the element, so markup alone is a working integration:
 On your callback page:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@sarv-in/login/dist/sarv-login.min.js"></script>
+<script
+  src="https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.0/dist/sarv-login.min.js"
+  integrity="sha384-mCXp3KveOj2R6Z8xU4GXstQn/9cA95o7wd1xlLIZAmaKQdJSih0YKzfC+q+cm3SO"
+  crossorigin="anonymous"
+></script>
 <script>
   const login = SarvLogin.createLogin({
     clientId: "YOUR_CLIENT_ID",
