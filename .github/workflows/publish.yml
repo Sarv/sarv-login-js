@@ -1,15 +1,27 @@
 name: publish
 
-# Tag-driven, never branch-driven: `npm version patch && git push --follow-tags`
-# is the whole release. A push to main can therefore never publish by accident.
+# TAG-DRIVEN. The whole release is:
+#
+#   npm version patch && git push --follow-tags
+#
+# `npm version` bumps package.json and writes the matching `v1.0.1` tag in one
+# step, so the bump and the trigger cannot disagree. A push to main can
+# therefore never publish by accident.
 on:
   push:
     tags: ["v*"]
+  # The recovery path for a release that failed halfway - a token that expired
+  # mid-publish, a runner that died. Safe to press twice: the guard below asks
+  # the REGISTRY whether this version is out, so a second run is a no-op rather
+  # than an EPUBLISHCONFLICT.
+  workflow_dispatch:
 
 permissions:
-  contents: read
-  # Required for npm provenance, which records in the registry which workflow
-  # and which commit produced the tarball.
+  # To create the GitHub Release for the tag.
+  contents: write
+  # npm provenance: records in the registry which workflow, which commit and
+  # which source tree produced the tarball. Also what the OIDC exchange for
+  # Trusted Publishing uses.
   id-token: write
 
 jobs:
@@ -23,18 +35,87 @@ jobs:
           node-version: 22
           cache: npm
           registry-url: https://registry.npmjs.org
-      - run: npm ci
+
+      - name: npm new enough to exchange an OIDC token
+        # ubuntu-latest's node 22 image ships npm 10, which has no Trusted
+        # Publishing support at all - it would ignore the OIDC credential and
+        # fail with ENEEDAUTH. 11.5.1 is the floor for that; ^11 keeps it.
+        run: npm install -g npm@^11
+
       - name: the tag must match package.json's version
         # Otherwise v1.0.2 can publish 1.0.1's contents, and the git history
-        # stops being a record of what is on the registry.
+        # stops being a record of what is on the registry. Skipped on a manual
+        # dispatch, where there is no tag to compare against.
+        if: github.event_name == 'push'
         run: |
+          set -euo pipefail
           tag="${GITHUB_REF_NAME#v}"
           pkg="$(node -p "require('./package.json').version")"
           if [ "$tag" != "$pkg" ]; then
             echo "ERROR: tag $tag does not match package.json $pkg"
             exit 1
           fi
+
+      - name: is this version already on the registry?
+        id: check
+        # Asked of the registry rather than assumed from the trigger: a re-run
+        # of a release whose publish succeeded but whose later steps failed
+        # must be a no-op, not a failure.
+        #
+        # A plain HTTP GET, so it needs no auth and no npm cache. 404 is the
+        # answer we want; anything other than 200 or 404 is a registry problem
+        # and must not be read as "not published".
+        run: |
+          set -euo pipefail
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          echo "name=$name"       >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          url="https://registry.npmjs.org/$(node -p "encodeURIComponent(process.argv[1])" "$name")/$version"
+          status="$(curl -s -o /dev/null -w '%{http_code}' "$url")"
+          case "$status" in
+            404) echo "$name@$version is not published yet"; echo "publish=true"  >> "$GITHUB_OUTPUT" ;;
+            200) echo "$name@$version is already published - nothing to do"; echo "publish=false" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "ERROR: registry answered $status for $url"; exit 1 ;;
+          esac
+
+      - run: npm ci
+        if: steps.check.outputs.publish == 'true'
+
       # `npm publish` runs prepublishOnly, which is typecheck + build + test.
-      - run: npm publish --provenance --access public
+      # That is the quality gate, deliberately the same one a human publishing
+      # by hand goes through.
+      #
+      # NODE_AUTH_TOKEN is the fallback. With Trusted Publishing configured for
+      # this package on npmjs, npm exchanges the workflow's OIDC token for a
+      # short-lived credential and never reads the secret - which is why this
+      # keeps working once NPM_TOKEN is deleted.
+      - name: publish to npm
+        if: steps.check.outputs.publish == 'true'
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: the GitHub Release for this tag
+        # After the publish, so a release page can never announce a version the
+        # registry does not have. Its own existence is checked too, because a
+        # dispatch re-run reaches this step with the release already made.
+        if: github.event_name == 'push'
+        env:
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.check.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists - leaving it alone"
+            exit 0
+          fi
+          # Notes come from the CHANGELOG section for this version when there is
+          # one; --generate-notes is the fallback, so a release is never blank.
+          notes="$(node scripts/changelog-section.mjs "$VERSION" || true)"
+          if [ -n "$notes" ]; then
+            printf '%s\n' "$notes" | gh release create "$TAG" --title "$TAG" --notes-file -
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
