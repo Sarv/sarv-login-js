@@ -127,17 +127,22 @@ On GitHub, in `Sarv/sarv-login-js`:
 
 Once `1.0.0` exists on the registry, replace the secret with **Trusted
 Publishing** (the package's npm settings page: repository `Sarv/sarv-login-js`,
-workflow `publish.yml`). Then delete `NPM_TOKEN` and drop `NODE_AUTH_TOKEN`
-from `publish.yml` — OIDC replaces the long-lived credential entirely. It can
-only be configured against a package that already exists, which is why the
-first publish is manual.
+workflow `publish.yml`). Then delete `NPM_TOKEN` — and nothing else needs to
+change: `publish.yml` already requests `id-token: write`, and npm prefers the
+OIDC exchange over `NODE_AUTH_TOKEN`, so the workflow keeps working with the
+secret gone. It can only be configured against a package that already exists,
+which is why the first publish is manual.
+
+The workflow installs `npm@^11` before publishing for exactly this reason. The
+`ubuntu-latest` Node 22 image ships npm 10, which has no Trusted Publishing
+support at all — it ignores the OIDC credential and fails with `ENEEDAUTH`.
 
 ---
 
 ## First publish, by hand
 
 ```bash
-npm run check                                     # typecheck, build, 37 tests against dist/
+npm run check                                     # typecheck, build, 100 tests against dist/
 npm publish --dry-run --registry https://registry.npmjs.org
 npm publish --access public --registry https://registry.npmjs.org --otp=<6-digit>
 ```
@@ -164,15 +169,28 @@ npm version patch          # or minor / major
 git push --follow-tags
 ```
 
-That is the release. `npm version` bumps `package.json`, commits, and tags;
-the push triggers `publish.yml`, which:
+That is the release — publishing is never a separate manual step. `npm version`
+bumps `package.json`, commits, and tags in one go, so the version and the tag
+cannot disagree; the push triggers `publish.yml`, which:
 
 1. refuses if the tag and `package.json` version disagree — otherwise `v1.0.2`
    could publish `1.0.1`'s contents and the git history would stop being a
    record of what is on the registry;
-2. runs `prepublishOnly` (typecheck, build, tests);
-3. publishes with `--provenance`, which records in the registry which workflow
-   and which commit produced the tarball.
+2. asks the **registry** whether that version is already published, and stops
+   there if it is. This is what makes a re-run safe: a release whose publish
+   succeeded but whose release-notes step failed can be replayed without an
+   `EPUBLISHCONFLICT`;
+3. runs `prepublishOnly` (typecheck, build, tests) — the same gate a manual
+   publish goes through, against `dist/`;
+4. publishes with `--provenance`, which records in the registry which workflow
+   and which commit produced the tarball;
+5. cuts the GitHub Release for the tag, with the `CHANGELOG.md` section for
+   that version as its body (`scripts/changelog-section.mjs`), falling back to
+   generated notes if the entry is missing.
+
+**Rerunning a failed release:** use **Actions > publish > Run workflow** rather
+than deleting and re-pushing the tag. The registry check makes it a no-op if
+the publish already landed, and it will finish whatever came after it.
 
 Which of `patch` / `minor` / `major` follows from `CHANGELOG.md`, so write the
 entry first. Anything that changes the button's rendered box, its default
