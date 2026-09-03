@@ -1,6 +1,6 @@
 # @sarv/login
 
-The official **Continue with Sarv** button, and the OAuth 2.1 + PKCE client
+The official **Login with Sarv** button, and the OAuth 2.1 + PKCE client
 behind it. One dependency-free package for plain HTML, vanilla JS and React.
 
 - **One renderer.** The button is a custom element, `<sarv-login-button>`. The
@@ -141,7 +141,7 @@ button.addEventListener("sarv-login", (event) => {
 | `redirect-uri` | `redirectUri` | an exact registered redirect    | —                    |
 | `scopes`       | `scopes`      | space-separated                 | `openid email profile` |
 | `oauth-url`    | `oauthUrl`    | authorization server origin     | `https://oauth.sarv.com` |
-| `label`        | `label`       | any text                        | `Continue with Sarv` |
+| `label`        | `label`       | any text                        | `Login with Sarv` |
 | `variant`      | `variant`     | `brand`, `surface`              | `brand`              |
 | `size`         | `size`        | `sm` (30px), `md` (38px), `lg` (44px) | `md`           |
 | `theme`        | `theme`       | `light`, `dark`, `auto`         | `auto`               |

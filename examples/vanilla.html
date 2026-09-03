@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Continue with Sarv - plain HTML</title>
+    <title>Login with Sarv - plain HTML</title>
     <style>
       /* Deliberately hostile host styles: this page proves the shadow root
          holds. A global button rule and a huge body font-size are exactly what
@@ -29,7 +29,7 @@
     </style>
   </head>
   <body>
-    <h1 style="font-size: 24px">Continue with Sarv</h1>
+    <h1 style="font-size: 24px">Login with Sarv</h1>
 
     <section>
       <h2>Declarative - just HTML</h2>
@@ -65,7 +65,7 @@
 
     <section>
       <h2>Full width</h2>
-      <sarv-login-button full-width label="Continue with Sarv"></sarv-login-button>
+      <sarv-login-button full-width label="Login with Sarv"></sarv-login-button>
     </section>
 
     <section>
@@ -94,7 +94,7 @@
         redirectUri: location.origin + location.pathname,
         oauthUrl: "http://localhost:8880",
         scopes: ["openid", "email", "profile"],
-        label: "Continue with Sarv",
+        label: "Login with Sarv",
         size: "lg",
       });
 

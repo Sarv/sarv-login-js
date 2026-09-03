@@ -1,5 +1,5 @@
 /**
- * @sarv/login — the "Continue with Sarv" button and the PKCE flow behind it.
+ * @sarv/login — the "Login with Sarv" button and the PKCE flow behind it.
  *
  * Two ways in, one implementation:
  *   - `<sarv-login-button>` / `renderButton()` for plain HTML and JS

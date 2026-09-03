@@ -5,7 +5,7 @@
  * ---------------------------------------------------------------------------
  * The package ships a vanilla API and a React component. If each rendered its
  * own markup, the two would drift — one would get a focus ring fix, the other a
- * padding fix, and "Continue with Sarv" would look like two different products.
+ * padding fix, and "Login with Sarv" would look like two different products.
  * So there is exactly one renderer, `<sarv-login-button>`, and both entry
  * points are thin wrappers over it: `renderButton()` creates one, and the React
  * component reconciles one. Styling and behaviour live in a single place.
@@ -22,7 +22,7 @@ import type {
 } from "./types.js";
 
 export const TAG_NAME = "sarv-login-button";
-export const DEFAULT_LABEL = "Continue with Sarv";
+export const DEFAULT_LABEL = "Login with Sarv";
 
 /** The event fired on click, before the redirect. Cancelable: calling
  *  `preventDefault()` stops the navigation, which is how a host runs its own

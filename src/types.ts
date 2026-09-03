@@ -65,7 +65,7 @@ export type SarvVariant = "brand" | "surface";
 
 /** How the button looks. Nothing here changes what the flow does. */
 export interface SarvButtonOptions {
-  /** Button text. Defaults to "Continue with Sarv". */
+  /** Button text. Defaults to "Login with Sarv". */
   label?: string;
   /**
    * `brand` is the filled blue button; `surface` is the white/dark one with a

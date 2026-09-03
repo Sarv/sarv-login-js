@@ -13,7 +13,7 @@ First public release.
 
 ### Added
 
-- `<sarv-login-button>`, a custom element that renders the "Continue with Sarv"
+- `<sarv-login-button>`, a custom element that renders the "Login with Sarv"
   button in a shadow root, so a host page's CSS cannot reshape it and its own
   styles cannot leak out.
 - Sarv's design system baked in: brand and surface variants, three sizes matching
