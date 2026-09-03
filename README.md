@@ -1,6 +1,6 @@
 # @sarv-in/login
 
-[![npm](https://img.shields.io/npm/v/@sarv-in/login?logo=npm&logoColor=white&label=npm&color=CB3837)](https://www.npmjs.com/package/@sarv-in/login)
+[![npm](https://img.shields.io/npm/v/@sarv-in/login?logo=npm&logoColor=white&label=npm&color=3069B0)](https://www.npmjs.com/package/@sarv-in/login)
 [![ci](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Sarv/sarv-login-js/badges/coverage.json)](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml)
 [![downloads](https://img.shields.io/npm/dm/@sarv-in/login?color=3069B0)](https://www.npmjs.com/package/@sarv-in/login)
