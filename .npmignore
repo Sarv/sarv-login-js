@@ -1,0 +1,5 @@
+# `files` in package.json is the allow-list that decides the tarball; this file
+# exists only so a stray local build artefact cannot sneak in through a path
+# `files` happens to include.
+*.tgz
+.DS_Store

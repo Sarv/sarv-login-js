@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Continue with Sarv - plain HTML</title>
+    <style>
+      /* Deliberately hostile host styles: this page proves the shadow root
+         holds. A global button rule and a huge body font-size are exactly what
+         breaks a third-party button that renders in the light DOM. */
+      body {
+        margin: 0;
+        padding: 48px 24px;
+        font: 20px/1.6 system-ui, sans-serif;
+        background: #fff;
+        color: #111;
+      }
+      button {
+        background: hotpink !important;
+        border-radius: 0 !important;
+        padding: 30px !important;
+        font-size: 30px !important;
+      }
+      h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; color: #6B7691; }
+      section { max-width: 640px; margin-bottom: 40px; }
+      .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+      .dark-plate { background: #131826; padding: 24px; border-radius: 12px; }
+      pre { background: #F7F8FB; padding: 12px; border-radius: 8px; font-size: 13px; overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <h1 style="font-size: 24px">Continue with Sarv</h1>
+
+    <section>
+      <h2>Declarative - just HTML</h2>
+      <!-- No JavaScript of your own. The bundle registers the element, and the
+           click starts the PKCE redirect. -->
+      <sarv-login-button
+        client-id="demo-client"
+        redirect-uri="http://localhost:8080/examples/vanilla.html"
+        oauth-url="http://localhost:8880"
+      ></sarv-login-button>
+    </section>
+
+    <section>
+      <h2>Variants and sizes</h2>
+      <div class="row">
+        <sarv-login-button size="sm" label="Sign in with Sarv"></sarv-login-button>
+        <sarv-login-button size="md"></sarv-login-button>
+        <sarv-login-button size="lg"></sarv-login-button>
+      </div>
+      <div class="row" style="margin-top: 16px">
+        <sarv-login-button variant="surface" theme="light"></sarv-login-button>
+        <sarv-login-button variant="surface" theme="light" disabled></sarv-login-button>
+      </div>
+    </section>
+
+    <section class="dark-plate">
+      <h2 style="color: #9AA3BC">On a dark surface (theme="dark")</h2>
+      <div class="row">
+        <sarv-login-button theme="dark"></sarv-login-button>
+        <sarv-login-button theme="dark" variant="surface"></sarv-login-button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Full width</h2>
+      <sarv-login-button full-width label="Continue with Sarv"></sarv-login-button>
+    </section>
+
+    <section>
+      <h2>Aligned to a host's own palette</h2>
+      <!-- Custom properties cross the shadow boundary; that is the documented
+           seam for an embedder who wants the button to match their brand. -->
+      <div style="--sarv-login-brand: #0F766E; --sarv-login-brand-strong: #115E59">
+        <sarv-login-button></sarv-login-button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Rendered from JavaScript, with the click intercepted</h2>
+      <div id="mount"></div>
+      <pre id="log">nothing yet</pre>
+    </section>
+
+    <!-- One file, no build step. In production point this at the CDN:
+         <script src="https://cdn.jsdelivr.net/npm/@sarv/login/dist/sarv-login.min.js"></script> -->
+    <script src="../dist/sarv-login.min.js"></script>
+    <script>
+      const log = document.getElementById("log");
+
+      const button = SarvLogin.renderButton("#mount", {
+        clientId: "demo-client",
+        redirectUri: location.origin + location.pathname,
+        oauthUrl: "http://localhost:8880",
+        scopes: ["openid", "email", "profile"],
+        label: "Continue with Sarv",
+        size: "lg",
+      });
+
+      button.addEventListener("sarv-login", (event) => {
+        // preventDefault() stops the redirect - the hook for validating a form,
+        // asking for consent, or running the flow yourself.
+        event.preventDefault();
+        log.textContent =
+          "intercepted; would redirect to:\n" +
+          "client_id=" + event.detail.config.clientId;
+      });
+
+      // On the redirect back, read the callback once. The state check happens
+      // inside; a mismatch never yields a code.
+      if (location.search.includes("code=") || location.search.includes("error=")) {
+        const login = SarvLogin.createLogin({
+          clientId: "demo-client",
+          redirectUri: location.origin + location.pathname,
+          oauthUrl: "http://localhost:8880",
+        });
+        const result = login.handleCallback();
+        log.textContent = SarvLogin.isCallbackError(result)
+          ? "callback error: " + result.error + " - " + (result.error_description || "")
+          : "got a code. POST it and codeVerifier to YOUR backend to exchange for tokens.";
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,40 @@
+name: publish
+
+# Tag-driven, never branch-driven: `npm version patch && git push --follow-tags`
+# is the whole release. A push to main can therefore never publish by accident.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  # Required for npm provenance, which records in the registry which workflow
+  # and which commit produced the tarball.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - name: the tag must match package.json's version
+        # Otherwise v1.0.2 can publish 1.0.1's contents, and the git history
+        # stops being a record of what is on the registry.
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "ERROR: tag $tag does not match package.json $pkg"
+            exit 1
+          fi
+      # `npm publish` runs prepublishOnly, which is typecheck + build + test.
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,90 @@
+{
+  "name": "@sarv/login",
+  "version": "1.0.0",
+  "description": "Continue with Sarv - the official login button and OAuth 2.1 + PKCE client for the Sarv identity server.",
+  "keywords": [
+    "sarv",
+    "oauth",
+    "oauth2",
+    "oidc",
+    "pkce",
+    "login",
+    "sso",
+    "sign-in",
+    "react",
+    "web-component"
+  ],
+  "license": "MIT",
+  "author": "Sarv <support@sarv.com> (https://sarv.com)",
+  "homepage": "https://github.com/Sarv/sarv-login-js#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sarv/sarv-login-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Sarv/sarv-login-js/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "unpkg": "./dist/sarv-login.min.js",
+  "jsdelivr": "./dist/sarv-login.min.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js",
+      "require": "./dist/react.cjs"
+    },
+    "./dist/sarv-login.min.js": "./dist/sarv-login.min.js",
+    "./package.json": "./package.json"
+  },
+  "sideEffects": [
+    "./dist/index.js",
+    "./dist/index.cjs",
+    "./dist/sarv-login.min.js"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "gen:logo": "node scripts/gen-logo.mjs",
+    "gen:version": "node scripts/sync-version.mjs",
+    "sync:sdk": "node scripts/sync-sdk.mjs",
+    "prebuild": "npm run gen:logo && npm run gen:version",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.mjs",
+    "check": "npm run typecheck && npm run build && npm test",
+    "prepublishOnly": "npm run check"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
