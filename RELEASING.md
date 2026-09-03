@@ -40,13 +40,57 @@ to it:
 ```
 
 If that file is ever copied next to this package, `npm publish` uploads to the
-intranet and succeeds, and the public registry never sees the version. This
-directory deliberately has **no local `.npmrc`**. Pass the registry explicitly
-anyway — it costs nothing and removes the whole class of mistake:
+intranet and **succeeds** — the public registry never sees the version, and
+nothing warns you. This directory deliberately has no local `.npmrc`, but that
+is not a defence, because the mapping can also come from `~/.npmrc` or from a
+`NPM_CONFIG_@sarv:REGISTRY` in CI.
 
-```bash
-npm publish --registry https://registry.npmjs.org
+So the destination is pinned in `package.json` instead, where it travels with
+the package and cannot be left behind:
+
+```json
+"publishConfig": {
+  "access": "public",
+  "registry": "https://registry.npmjs.org/"
+}
 ```
+
+`publishConfig.registry` beats any `@sarv:registry` mapping on any machine, so
+`npm publish` from this directory goes to npmjs whoever runs it. Passing
+`--registry https://registry.npmjs.org` on top of that is belt and braces and
+still worth typing for a first publish.
+
+#### The scope is shared, and npm cannot split it per package
+
+npm maps registries **per scope only** — there is no per-package override. So a
+single `@sarv:registry` line captures *every* `@sarv/*` name, this one included.
+That has one consequence in each direction:
+
+- **Publishing** is handled by the `publishConfig` above.
+- **Installing** is not. On a machine with that mapping, `npm i @sarv/login`
+  asks the internal registry for it. The internal registry proxies npmjs
+  (`left-pad`, `@babel/core` and `@types/react` all resolve through it), so this
+  works *if* the `@sarv/*` group in its `config.yaml` also carries
+  `proxy: npmjs`. If that group is local-only — the usual default for a private
+  scope — the install 404s on an internal machine while working fine for every
+  external consumer. One line settles which it is:
+
+  ```bash
+  # on the registry host
+  grep -A4 "'@sarv/\*'" /path/to/verdaccio/config.yaml
+  ```
+
+  If there is no `proxy:` under that group, add `proxy: npmjs` and restart.
+
+Do **not** split the scope to avoid this. Keeping `@sarv` on npmjs owned by the
+Sarv org is what makes a dependency-confusion attack impossible: nobody else can
+publish `@sarv/logger` and have an internal machine pick it up, because the name
+is ours. The rule that follows is a naming rule, not a registry one — an internal
+package and a public package must never share a name, in either direction.
+
+Internal `@sarv/*` names as of the last check: `@sarv/deepcall-logger`,
+`@sarv/logger`, `@sarv/theme`, `@sarv/workspace-shell`. `@sarv/theme` is the one
+to watch, since a public design-system package is a plausible thing to want.
 
 ### 3. Let CI publish
 
@@ -203,6 +247,6 @@ with no process.
 | `401 Unauthorized` from `npm whoami` | the token in `~/.npmrc` expired; `npm login` again |
 | `402 Payment Required` | scoped package published without `--access public` |
 | `403 Forbidden` | the account does not own the `@sarv` scope, or the version already exists — versions are immutable, bump instead |
-| `404` on a package you just published | it went to the internal registry; check for an `@sarv:registry` line |
+| `404` on a package you just published | it went to the internal registry; check for an `@sarv:registry` line, and that `publishConfig.registry` is still in `package.json` |
 | `ERROR: tag X does not match package.json Y` | the tag was made by hand; delete it and use `npm version` |
 | the CDN 404s minutes after publishing | first-request caching; try the exact-version URL once more before assuming a bad publish |
