@@ -326,12 +326,20 @@ bundle, and a green suite over the TypeScript sources would not catch a build
 that shipped the wrong exports.
 
 `npm run test:coverage` (Node 22.8+) reports the same suite with a floor CI
-enforces, so the number cannot quietly regress. Read it for what it is: it
-measures the *node* suite against the bundle, so the pure logic - PKCE, the
-callback rules, the stylesheet - is what it covers, while the custom element
-and the React wrapper are browser-only and are covered by the Chromium probe
-instead. A high number here would mean the DOM code had been mocked, not
-tested.
+enforces, so the number cannot quietly regress. The floors are integers on
+purpose: node silently truncates a fractional `--test-coverage-lines`, so a
+floor written as `97.5` is a gate that never fires.
+
+The suite covers the DOM code too, in a synthetic DOM
+([happy-dom](https://github.com/capricorn86/happy-dom)) rather than by mocking
+it: the custom element is mounted, clicked and read back, and the React wrapper
+is rendered both through `react-dom/server` for the prop-to-attribute mapping
+and through `createRoot` for the effects, the ref and the listener cleanup.
+That is what a synthetic DOM is good for - what the button *does*.
+
+It is not what the button *looks like*, and no coverage number will ever say
+anything about that. Appearance is verified separately, in real Chromium, by
+`e2e/login-button.mjs`. Both matter, and neither substitutes for the other.
 
 Publishing to npm and the CDNs is written up in
 [RELEASING.md](RELEASING.md) - the registry setup, the tag-driven workflow, and
