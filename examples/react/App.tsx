@@ -7,7 +7,7 @@
  * readable by every script on it.
  */
 import { useEffect, useState } from "react";
-import { SarvLoginButton, useSarvLogin } from "@sarv/login/react";
+import { SarvLoginButton, useSarvLogin } from "@sarv-in/login/react";
 
 const CONFIG = {
   clientId: import.meta.env.VITE_SARV_CLIENT_ID,

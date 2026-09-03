@@ -1,13 +1,13 @@
-# @sarv/login
+# @sarv-in/login
 
-[![npm](https://img.shields.io/npm/v/@sarv/login?logo=npm&logoColor=white&label=npm&color=CB3837)](https://www.npmjs.com/package/@sarv/login)
+[![npm](https://img.shields.io/npm/v/@sarv-in/login?logo=npm&logoColor=white&label=npm&color=CB3837)](https://www.npmjs.com/package/@sarv-in/login)
 [![ci](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Sarv/sarv-login-js/badges/coverage.json)](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml)
-[![downloads](https://img.shields.io/npm/dm/@sarv/login?color=3069B0)](https://www.npmjs.com/package/@sarv/login)
-[![minified + gzip](https://img.shields.io/bundlejs/size/@sarv/login?label=min%20%2B%20gzip&color=3069B0)](https://bundlejs.com/?q=%40sarv%2Flogin)
-[![types](https://img.shields.io/npm/types/@sarv/login?logo=typescript&logoColor=white&color=3178C6)](https://www.npmjs.com/package/@sarv/login)
-[![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](https://www.npmjs.com/package/@sarv/login?activeTab=dependencies)
-[![license](https://img.shields.io/npm/l/@sarv/login?color=6B7691)](LICENSE)
+[![downloads](https://img.shields.io/npm/dm/@sarv-in/login?color=3069B0)](https://www.npmjs.com/package/@sarv-in/login)
+[![minified + gzip](https://img.shields.io/bundlejs/size/@sarv-in/login?label=min%20%2B%20gzip&color=3069B0)](https://bundlejs.com/?q=%40sarv-in%2Flogin)
+[![types](https://img.shields.io/npm/types/@sarv-in/login?logo=typescript&logoColor=white&color=3178C6)](https://www.npmjs.com/package/@sarv-in/login)
+[![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](https://www.npmjs.com/package/@sarv-in/login?activeTab=dependencies)
+[![license](https://img.shields.io/npm/l/@sarv-in/login?color=6B7691)](LICENSE)
 
 The official **Login with Sarv** button, and the OAuth 2.1 + PKCE client
 behind it. One dependency-free package for plain HTML, vanilla JS and React.
@@ -53,13 +53,13 @@ deliberately hostile, if you want to poke at them.
 ## Install
 
 ```bash
-npm install @sarv/login
+npm install @sarv-in/login
 ```
 
 ### Or a single script tag — no build step
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@sarv/login/dist/sarv-login.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@sarv-in/login/dist/sarv-login.min.js"></script>
 
 <sarv-login-button
   client-id="YOUR_CLIENT_ID"
@@ -67,8 +67,8 @@ npm install @sarv/login
 ></sarv-login-button>
 ```
 
-unpkg works the same: `https://unpkg.com/@sarv/login/dist/sarv-login.min.js`.
-Pin a version in production — `@sarv/login@1.0.0` — so a release cannot change
+unpkg works the same: `https://unpkg.com/@sarv-in/login/dist/sarv-login.min.js`.
+Pin a version in production — `@sarv-in/login@1.0.0` — so a release cannot change
 your page without you shipping anything.
 
 Self-hosted alternative, on the same origin as the authorization server — for
@@ -95,7 +95,7 @@ The script registers the element, so markup alone is a working integration:
 On your callback page:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@sarv/login/dist/sarv-login.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@sarv-in/login/dist/sarv-login.min.js"></script>
 <script>
   const login = SarvLogin.createLogin({
     clientId: "YOUR_CLIENT_ID",
@@ -122,7 +122,7 @@ On your callback page:
 ### React
 
 ```tsx
-import { SarvLoginButton, useSarvLogin } from "@sarv/login/react";
+import { SarvLoginButton, useSarvLogin } from "@sarv-in/login/react";
 
 const config = {
   clientId: import.meta.env.VITE_SARV_CLIENT_ID,
@@ -150,7 +150,7 @@ at the top of the file that imports it.
 ### Vanilla JS, imperatively
 
 ```js
-import { renderButton } from "@sarv/login";
+import { renderButton } from "@sarv-in/login";
 
 const button = renderButton("#sign-in", {
   clientId: "YOUR_CLIENT_ID",

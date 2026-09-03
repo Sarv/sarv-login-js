@@ -17,10 +17,18 @@ every release is the two commands in [Every release after that](#every-release-a
 ```bash
 npm login                      # interactive: browser + OTP
 npm whoami
-npm org ls sarv                # does your account own the @sarv org?
+npm org ls sarv-in             # does your account own the @sarv-in org?
 ```
 
-`npm org ls sarv` erroring means the org does not exist under your account.
+This package publishes to the **`@sarv-in`** scope, not `@sarv`. `@sarv` on
+npmjs belongs to a different account: `npm org ls sarv` lists one member named
+`sarv` and no teams, and a `PUT` to `@sarv/login` as `ankursarv` comes back
+`404` — npm answers a scope you cannot write to with "not found" rather than
+"forbidden", so a 404 on publish is a permissions answer, not a missing-package
+one. `@sarv-in` is a real org with `ankursarv` as owner, and it is where
+`@sarv-in/document-editor-react` already lives.
+
+`npm org ls sarv-in` erroring means the org does not exist under your account.
 Create it at <https://npmjs.com/org/create> — free for public packages. If the
 name is held by somebody else, the package has to be renamed before it can ever
 be published; the name appears in `package.json`, `README.md`, the examples and
@@ -60,37 +68,52 @@ the package and cannot be left behind:
 `--registry https://registry.npmjs.org` on top of that is belt and braces and
 still worth typing for a first publish.
 
-#### The scope is shared, and npm cannot split it per package
+#### Why the public scope is `@sarv-in` and the internal one is `@sarv`
 
-npm maps registries **per scope only** — there is no per-package override. So a
-single `@sarv:registry` line captures *every* `@sarv/*` name, this one included.
-That has one consequence in each direction:
+npm maps registries **per scope only** — there is no per-package override. So
+one `@sarv:registry` line captures *every* `@sarv/*` name at once, and there is
+no way to exempt a single package from it. Publishing this package under `@sarv`
+would therefore have put a public package inside the scope that is already
+pointed at the intranet on every Sarv machine.
 
-- **Publishing** is handled by the `publishConfig` above.
-- **Installing** is not. On a machine with that mapping, `npm i @sarv/login`
-  asks the internal registry for it. The internal registry proxies npmjs
-  (`left-pad`, `@babel/core` and `@types/react` all resolve through it), so this
-  works *if* the `@sarv/*` group in its `config.yaml` also carries
-  `proxy: npmjs`. If that group is local-only — the usual default for a private
-  scope — the install 404s on an internal machine while working fine for every
-  external consumer. One line settles which it is:
+Two different scopes removes that entirely: `@sarv` stays internal, `@sarv-in`
+is public, and no `.npmrc` line can confuse one for the other. `npm i
+@sarv-in/login` goes to npmjs from any machine, including one with the internal
+mapping, because the mapping does not match the scope. That is the whole reason
+for the `-in` suffix — it is not a fallback after `@sarv` was taken, it is the
+arrangement that makes the two registries independent.
 
-  ```bash
-  # on the registry host
-  grep -A4 "'@sarv/\*'" /path/to/verdaccio/config.yaml
-  ```
+**So this is the convention, not a decision about one package:**
 
-  If there is no `proxy:` under that group, add `proxy: npmjs` and restart.
+| | scope | registry |
+|---|---|---|
+| Public, on npmjs | `@sarv-in/*` | `https://registry.npmjs.org/` |
+| Internal only | `@sarv/*` | `https://dev-npm-registry.sarv.com/` |
 
-Do **not** split the scope to avoid this. Keeping `@sarv` on npmjs owned by the
-Sarv org is what makes a dependency-confusion attack impossible: nobody else can
-publish `@sarv/logger` and have an internal machine pick it up, because the name
-is ours. The rule that follows is a naming rule, not a registry one — an internal
-package and a public package must never share a name, in either direction.
+Every future public package goes under `@sarv-in` for the same reason this one
+does. The org already holds `@sarv-in/document-editor-react` and
+`@sarv-in/login`, and `ankursarv` is its owner, so a new public package needs no
+new setup — only `"name": "@sarv-in/<thing>"` and the `publishConfig` block
+above. Deciding this per package is how a public name eventually lands in the
+internal scope and nobody notices until an install fails on someone's laptop.
 
-Internal `@sarv/*` names as of the last check: `@sarv/deepcall-logger`,
-`@sarv/logger`, `@sarv/theme`, `@sarv/workspace-shell`. `@sarv/theme` is the one
-to watch, since a public design-system package is a plausible thing to want.
+The `publishConfig.registry` pin above is now belt and braces rather than
+load-bearing. Keep it: it costs nothing and it survives someone later deciding
+to map `@sarv-in` too.
+
+**The naming rule that remains.** An internal package and a public package must
+never share a *fully qualified* name. Different scopes make that easy, but it is
+still worth knowing what is on the other side. Internal `@sarv/*` names as of
+the last check: `@sarv/deepcall-logger`, `@sarv/logger`, `@sarv/theme`,
+`@sarv/workspace-shell`.
+
+**One thing to confirm separately.** Those internal names live in a scope that
+Sarv does not appear to own on public npmjs. If nobody at Sarv controls the
+public `@sarv` scope, then a public `@sarv/logger` could be published by whoever
+does, and any machine that resolves that name against npmjs — a laptop without
+the internal `.npmrc`, a CI runner, a fresh container — would install theirs.
+That is dependency confusion, and the fix is to own the scope rather than to
+rename anything: claim `@sarv` on npmjs and leave it empty.
 
 ### 3. Let CI publish
 
@@ -99,7 +122,7 @@ On GitHub, in `Sarv/sarv-login-js`:
 1. **Settings > Environments > New environment**, named exactly `npm`. The
    workflow already targets it, so the name is not a preference.
 2. In that environment, add a secret named `NPM_TOKEN`: an npmjs **Granular
-   Access Token** with write access limited to `@sarv/login`. Not a Classic
+   Access Token** with write access limited to `@sarv-in/login`. Not a Classic
    token — a classic automation token can publish everything the account owns.
 
 Once `1.0.0` exists on the registry, replace the secret with **Trusted
@@ -192,13 +215,13 @@ a file on its first request and cache it. No account, no upload, no build hook.
 The moment `npm publish` succeeds, these are live:
 
 ```
-https://cdn.jsdelivr.net/npm/@sarv/login@1.0.0/dist/sarv-login.min.js
-https://unpkg.com/@sarv/login@1.0.0/dist/sarv-login.min.js
+https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.0/dist/sarv-login.min.js
+https://unpkg.com/@sarv-in/login@1.0.0/dist/sarv-login.min.js
 ```
 
 `package.json` declares `unpkg` and `jsdelivr` as `./dist/sarv-login.min.js`, so
-the bare `https://unpkg.com/@sarv/login` resolves to the button too. jsDelivr
-also serves ESM at `https://cdn.jsdelivr.net/npm/@sarv/login@1.0.0/+esm`.
+the bare `https://unpkg.com/@sarv-in/login` resolves to the button too. jsDelivr
+also serves ESM at `https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.0/+esm`.
 
 Three rules for the URLs that go in the docs:
 
@@ -207,7 +230,7 @@ Three rules for the URLs that go in the docs:
   simultaneously, with no deploy on their side to correlate a breakage with.
 - **Publish an SRI hash beside each pinned URL.** After a release:
   ```bash
-  curl -s https://cdn.jsdelivr.net/npm/@sarv/login@1.0.0/dist/sarv-login.min.js \
+  curl -s https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.0/dist/sarv-login.min.js \
     | openssl dgst -sha384 -binary | openssl base64 -A
   ```
   then `integrity="sha384-..." crossorigin="anonymous"`. SRI only works against
@@ -233,7 +256,7 @@ with no process.
 - [ ] `npm run check` is green (typecheck, build, tests against `dist/`)
 - [ ] `npm publish --dry-run` lists 22 files with no source or build junk
 - [ ] `npm version <patch|minor|major>` and `git push --follow-tags`
-- [ ] the `publish` workflow went green and `npm view @sarv/login version` agrees
+- [ ] the `publish` workflow went green and `npm view @sarv-in/login version` agrees
 - [ ] the pinned CDN URL responds, and the SRI hash in the docs matches it
 - [ ] `npm run sync:sdk`, then commit `sdk/js/` in the oauth repo
 - [ ] if the button's appearance changed: rerun `e2e/login-button-shots.mjs`
@@ -246,7 +269,8 @@ with no process.
 |---|---|
 | `401 Unauthorized` from `npm whoami` | the token in `~/.npmrc` expired; `npm login` again |
 | `402 Payment Required` | scoped package published without `--access public` |
-| `403 Forbidden` | the account does not own the `@sarv` scope, or the version already exists — versions are immutable, bump instead |
-| `404` on a package you just published | it went to the internal registry; check for an `@sarv:registry` line, and that `publishConfig.registry` is still in `package.json` |
+| `403 Forbidden` | the account does not own the `@sarv-in` scope, or the version already exists — versions are immutable, bump instead |
+| `404` on a package you just published | it went to the internal registry; check for a scope-to-registry line, and that `publishConfig.registry` is still in `package.json` |
+| `404` on `PUT` when publishing | not a missing package — the account cannot write to that scope. npm returns 404 rather than 403 so it does not confirm the scope exists. Check `npm org ls <scope>` lists you |
 | `ERROR: tag X does not match package.json Y` | the tag was made by hand; delete it and use `npm version` |
 | the CDN 404s minutes after publishing | first-request caching; try the exact-version URL once more before assuming a bad publish |

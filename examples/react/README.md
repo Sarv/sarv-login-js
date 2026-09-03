@@ -1,7 +1,7 @@
 # React example
 
 ```bash
-npm install @sarv/login react
+npm install @sarv-in/login react
 ```
 
 `App.tsx` here is a Vite-style app (it reads `import.meta.env`); the component

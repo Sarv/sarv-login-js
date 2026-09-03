@@ -86,7 +86,7 @@ let ButtonClass: CustomElementConstructor | undefined;
  * Deferred into a function because `class extends HTMLElement` evaluates
  * HTMLElement at definition time, and this module is imported during
  * server-side rendering where there is no DOM. Touching it at module scope
- * would make `import "@sarv/login"` throw in Next.js.
+ * would make `import "@sarv-in/login"` throw in Next.js.
  */
 function buildButtonClass(): CustomElementConstructor {
   if (ButtonClass) return ButtonClass;

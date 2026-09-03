@@ -1,5 +1,5 @@
 /**
- * The React entry point: `@sarv/login/react`.
+ * The React entry point: `@sarv-in/login/react`.
  *
  * Two halves, because the component has two jobs and they fail differently.
  *

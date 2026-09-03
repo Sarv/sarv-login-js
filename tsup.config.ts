@@ -15,7 +15,7 @@ export default defineConfig([
   },
   {
     // The CDN build: one file, one global, no imports. This is what a plain
-    // <script src="https://cdn.jsdelivr.net/npm/@sarv/login"> gets, so it has
+    // <script src="https://cdn.jsdelivr.net/npm/@sarv-in/login"> gets, so it has
     // to work with no bundler, no module loader and no build step at all.
     entry: { "sarv-login.min": "src/index.ts" },
     format: ["iife"],

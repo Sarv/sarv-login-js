@@ -30,7 +30,7 @@ First public release.
 - The `state` check is enforced inside `handleCallback`: a callback that does not
   match the flow this browser started returns an error and never hands back the
   authorization code.
-- React entry point `@sarv/login/react` with `<SarvLoginButton>` and
+- React entry point `@sarv-in/login/react` with `<SarvLoginButton>` and
   `useSarvLogin()`, rendering the same custom element rather than a second
   implementation of the button.
 - A cancelable `sarv-login` event, for validating a form or running the flow

@@ -1,5 +1,5 @@
 /**
- * The React entry point: `@sarv/login/react`.
+ * The React entry point: `@sarv-in/login/react`.
  *
  * WHY THIS FILE IS THIN, AND WHY IT IS .ts RATHER THAN .tsx
  * ---------------------------------------------------------------------------
