@@ -66,6 +66,7 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.mjs",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=55 --test-coverage-branches=80 --test-coverage-functions=50 test/*.test.mjs",
     "check": "npm run typecheck && npm run build && npm test",
     "prepublishOnly": "npm run check"
   },

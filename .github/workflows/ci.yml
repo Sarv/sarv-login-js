@@ -37,3 +37,60 @@ jobs:
         run: |
           npm run gen:logo
           git diff --exit-code src/logo.generated.ts
+
+  # Coverage runs once, on the newest Node, rather than in the matrix: the
+  # number is a property of the test suite, not of the runtime, and node's
+  # coverage threshold flags only exist from 22.8 onwards.
+  coverage:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      # Only to push the badge JSON to the `badges` branch, which holds nothing
+      # else and is never merged.
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: coverage, with the floor enforced
+        # `tee` keeps the report in the job log; pipefail keeps the threshold
+        # failure from being swallowed by the pipe.
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee coverage.txt
+      - name: publish the badge
+        # Only from main: a pull request must not be able to rewrite the badge
+        # the README shows, and a fork has no write token anyway.
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Done in a separate clone rather than by switching branches in place:
+        # `badges` is an orphan branch holding one file, and switching to it in
+        # the build tree would delete every tracked file main has and then
+        # restore them. An isolated clone cannot get that wrong.
+        run: |
+          node scripts/coverage-badge.mjs coverage.txt > "$RUNNER_TEMP/coverage.json"
+          cat "$RUNNER_TEMP/coverage.json"
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git clone --quiet --depth 1 --branch badges "$remote" "$RUNNER_TEMP/badges"; then
+            echo "badges branch exists"
+          else
+            mkdir -p "$RUNNER_TEMP/badges"
+            git -C "$RUNNER_TEMP/badges" init --quiet
+            git -C "$RUNNER_TEMP/badges" checkout --quiet --orphan badges
+            git -C "$RUNNER_TEMP/badges" remote add origin "$remote"
+          fi
+          cp "$RUNNER_TEMP/coverage.json" "$RUNNER_TEMP/badges/coverage.json"
+          git -C "$RUNNER_TEMP/badges" config user.name "github-actions[bot]"
+          git -C "$RUNNER_TEMP/badges" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$RUNNER_TEMP/badges" add coverage.json
+          if git -C "$RUNNER_TEMP/badges" diff --cached --quiet; then
+            echo "coverage unchanged - nothing to push"
+          else
+            git -C "$RUNNER_TEMP/badges" commit --quiet -m "chore: coverage badge for ${GITHUB_SHA:0:7}"
+            git -C "$RUNNER_TEMP/badges" push --quiet origin badges
+          fi
