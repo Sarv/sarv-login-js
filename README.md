@@ -1,5 +1,14 @@
 # @sarv/login
 
+[![npm](https://img.shields.io/npm/v/@sarv/login?logo=npm&logoColor=white&label=npm&color=CB3837)](https://www.npmjs.com/package/@sarv/login)
+[![ci](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml)
+[![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FSarv%2Fsarv-login-js%2Fbadges%2Fcoverage.json)](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml)
+[![downloads](https://img.shields.io/npm/dm/@sarv/login?color=3069B0)](https://www.npmjs.com/package/@sarv/login)
+[![minified + gzip](https://img.shields.io/bundlejs/size/@sarv/login?label=min%20%2B%20gzip&color=3069B0)](https://bundlejs.com/?q=%40sarv%2Flogin)
+[![types](https://img.shields.io/npm/types/@sarv/login?logo=typescript&logoColor=white&color=3178C6)](https://www.npmjs.com/package/@sarv/login)
+[![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](https://www.npmjs.com/package/@sarv/login?activeTab=dependencies)
+[![license](https://img.shields.io/npm/l/@sarv/login?color=6B7691)](LICENSE)
+
 The official **Login with Sarv** button, and the OAuth 2.1 + PKCE client
 behind it. One dependency-free package for plain HTML, vanilla JS and React.
 
@@ -12,6 +21,32 @@ behind it. One dependency-free package for plain HTML, vanilla JS and React.
   brand mark are taken from `sarv_theme`, with a light, dark and `auto` theme.
 - **Zero runtime dependencies**, ~21 KB minified including the logo.
 - **PKCE by default**, S256 only, with the `state` check enforced for you.
+
+---
+
+## What it looks like
+
+Every image below is a screenshot of the built bundle running in Chromium - not
+a mock-up, and not CSS reproduced by hand. They are regenerated from `dist/` on
+release, so the picture cannot drift from what you install.
+
+| | |
+|---|---|
+| <img src="https://raw.githubusercontent.com/Sarv/sarv-login-js/main/assets/screenshots/brand.png" width="197" alt="Login with Sarv button, filled brand blue"> | **The default.** No appearance attributes at all. |
+| <img src="https://raw.githubusercontent.com/Sarv/sarv-login-js/main/assets/screenshots/surface.png" width="197" alt="Login with Sarv button, white with a border"> | `variant="surface"` - for a page that already has a primary action. |
+| <img src="https://raw.githubusercontent.com/Sarv/sarv-login-js/main/assets/screenshots/size-sm.png" width="176" alt="small Login with Sarv button"> | `size="sm"` - 30px, the design system's `.btn-sm`. |
+| <img src="https://raw.githubusercontent.com/Sarv/sarv-login-js/main/assets/screenshots/size-lg.png" width="215" alt="large Login with Sarv button"> | `size="lg"` - 44px, the design system's `.btn-lg`. |
+| <img src="https://raw.githubusercontent.com/Sarv/sarv-login-js/main/assets/screenshots/label.png" width="217" alt="button reading Sign in to continue"> | `label="Sign in to continue"` - any wording you like. |
+| <img src="https://raw.githubusercontent.com/Sarv/sarv-login-js/main/assets/screenshots/disabled.png" width="197" alt="dimmed Login with Sarv button"> | `disabled` - rendered, not clickable, for a form that is not valid yet. |
+| <img src="https://raw.githubusercontent.com/Sarv/sarv-login-js/main/assets/screenshots/dark-brand.png" width="197" alt="Login with Sarv button on a dark background"> | `theme="dark"` - or leave it out and `auto` follows the visitor's OS. |
+| <img src="https://raw.githubusercontent.com/Sarv/sarv-login-js/main/assets/screenshots/dark-surface.png" width="197" alt="bordered Login with Sarv button on a dark background"> | `theme="dark" variant="surface"` |
+| <img src="https://raw.githubusercontent.com/Sarv/sarv-login-js/main/assets/screenshots/custom-colour.png" width="197" alt="Login with Sarv button in teal"> | `style="--sarv-login-brand: #0F766E"` - the one seam through the shadow boundary. |
+| <img src="https://raw.githubusercontent.com/Sarv/sarv-login-js/main/assets/screenshots/full-width.png" width="452" alt="full width Login with Sarv button"> | `full-width` - stretches to the container. |
+
+Sizes, variants and themes combine freely, and the icon is Sarv's own brand mark
+inlined into the bundle - there is no image request to make it appear.
+`examples/vanilla.html` renders all of the above on a page whose CSS is
+deliberately hostile, if you want to poke at them.
 
 ---
 
@@ -276,6 +311,11 @@ body text). It asserts the real computed box, both themes, the custom-property
 seam, Tab and `focus()` reaching the inner button, and that the verifier stored
 before the redirect hashes to the challenge that was sent.
 
+`e2e/login-button-shots.mjs`, beside it, regenerates the gallery images at the
+top of this file into `assets/screenshots/`. They come out of the same built
+bundle, so a change to the button shows up in the README as soon as the images
+are regenerated - which is a release step, not something to remember.
+
 The brand mark is generated into `src/logo.generated.ts` from
 `assets/sarv-mark.svg` by `npm run gen:logo`; the asset is a copy of
 `sarv_theme/icons/sarv-mark.svg`. To change the mark, replace the asset and
@@ -284,6 +324,18 @@ regenerate — never edit the generated file, and never edit `sarv_theme`.
 Tests run against `dist/`, not `src/`: what an integrator downloads is the
 bundle, and a green suite over the TypeScript sources would not catch a build
 that shipped the wrong exports.
+
+`npm run test:coverage` (Node 22.8+) reports the same suite with a floor CI
+enforces, so the number cannot quietly regress. Read it for what it is: it
+measures the *node* suite against the bundle, so the pure logic - PKCE, the
+callback rules, the stylesheet - is what it covers, while the custom element
+and the React wrapper are browser-only and are covered by the Chromium probe
+instead. A high number here would mean the DOM code had been mocked, not
+tested.
+
+Publishing to npm and the CDNs is written up in
+[RELEASING.md](RELEASING.md) - the registry setup, the tag-driven workflow, and
+why the CDN URLs in this README are pinned to an exact version.
 
 ## License
 
