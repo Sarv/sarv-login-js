@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@sarv/login?logo=npm&logoColor=white&label=npm&color=CB3837)](https://www.npmjs.com/package/@sarv/login)
 [![ci](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml)
-[![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FSarv%2Fsarv-login-js%2Fbadges%2Fcoverage.json)](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml)
+[![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Sarv/sarv-login-js/badges/coverage.json)](https://github.com/Sarv/sarv-login-js/actions/workflows/ci.yml)
 [![downloads](https://img.shields.io/npm/dm/@sarv/login?color=3069B0)](https://www.npmjs.com/package/@sarv/login)
 [![minified + gzip](https://img.shields.io/bundlejs/size/@sarv/login?label=min%20%2B%20gzip&color=3069B0)](https://bundlejs.com/?q=%40sarv%2Flogin)
 [![types](https://img.shields.io/npm/types/@sarv/login?logo=typescript&logoColor=white&color=3178C6)](https://www.npmjs.com/package/@sarv/login)
