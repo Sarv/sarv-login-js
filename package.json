@@ -56,7 +56,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "scripts": {
     "gen:logo": "node scripts/gen-logo.mjs",

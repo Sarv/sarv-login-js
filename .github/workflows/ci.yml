@@ -13,11 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # 18 is the floor declared in `engines`; 22 is what most consumers run.
-        node: [18, 22]
+        # 20 is the floor declared in `engines`, and it is a real floor rather
+        # than a guess: Web Crypto only became a non-experimental global in
+        # Node 19, so on Node 18 `globalThis.crypto` is undefined and the PKCE
+        # helpers throw. CI proved it - 5 tests failed there and passed on 22.
+        # 24 is current. In a browser none of this applies; this matrix covers
+        # the server-side use of the pure helpers (SSR, tests).
+        node: [20, 22, 24]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
           cache: npm
