@@ -24,6 +24,14 @@ import type {
 export const TAG_NAME = "sarv-login-button";
 export const DEFAULT_LABEL = "Login with Sarv";
 
+/** Said by both the click path and `login()`, so the two cannot drift apart.
+ *  A console error, not a thrown one: this runs from a click handler, and an
+ *  exception there is swallowed by the page. The message has to name the
+ *  attributes, because the symptom the developer sees is "it does nothing". */
+const missingConfigMessage = (tag: string, event: string): string =>
+  `<${tag}>: cannot start login without both \`client-id\` and \`redirect-uri\`. ` +
+  `Listen for the "${event}" event instead if your app starts the flow itself.`;
+
 /** The event fired on click, before the redirect. Cancelable: calling
  *  `preventDefault()` stops the navigation, which is how a host runs its own
  *  consent step, analytics gate or form validation first. */
@@ -220,13 +228,7 @@ function buildButtonClass(): CustomElementConstructor {
     async login(): Promise<void> {
       const config = this.readConfig();
       if (!config) {
-        // A console error, not a thrown one: this runs from a click handler, and
-        // an exception there is swallowed by the page. The message has to say
-        // what is missing, because the symptom is "the button does nothing".
-        console.error(
-          `<${TAG_NAME}>: cannot start login without both \`client-id\` and \`redirect-uri\`. ` +
-            `Listen for the "${LOGIN_EVENT}" event instead if your app starts the flow itself.`
-        );
+        console.error(missingConfigMessage(TAG_NAME, LOGIN_EVENT));
         return;
       }
       try {
@@ -262,9 +264,20 @@ function buildButtonClass(): CustomElementConstructor {
       );
       // preventDefault() on the event means "I will handle it".
       if (!proceed) return;
-      // No client id configured: the element is being used purely as a styled
-      // trigger, and the host's own listener is the whole behaviour.
-      if (!this.readConfig()) return;
+      if (!this.readConfig()) {
+        // Nothing configured at all: the element is a styled trigger and the
+        // host's own listener is the whole behaviour, so silence is correct.
+        //
+        // HALF configured is a different thing. `client-id` without
+        // `redirect-uri` is a forgotten attribute, and returning quietly there
+        // gives the developer a button that does nothing with no clue why —
+        // the worst failure this component can have. So it says the same thing
+        // `login()` would have said.
+        if (this.clientId || this.redirectUri) {
+          console.error(missingConfigMessage(TAG_NAME, LOGIN_EVENT));
+        }
+        return;
+      }
       void this.login();
     };
 
