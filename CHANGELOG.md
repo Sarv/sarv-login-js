@@ -72,6 +72,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The CJS sourcemaps are no longer published. They were four files totalling
+  330 KB — more than a third of the installed package — mapping a build that is
+  consumed by `require()` in Node and Jest, where a stack trace is read in the
+  bundled file anyway. The ESM sourcemaps, which bundlers and browser devtools
+  actually use, still ship. Net effect: the package installs *smaller* than it
+  did before Vue and Angular support was added (545 KB unpacked, down from
+  599 KB), while covering two more frameworks.
 - **`extraParams.nonce` now throws.** Before nonce support it was the only way
   to send one and is what the docs suggested. It has to be reserved now: left
   through, the `extraParams` spread would overwrite the nonce in the URL while

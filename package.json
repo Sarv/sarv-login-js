@@ -63,6 +63,7 @@
   ],
   "files": [
     "dist",
+    "!dist/*.cjs.map",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

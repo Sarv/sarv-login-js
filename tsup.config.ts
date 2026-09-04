@@ -12,6 +12,11 @@ export default defineConfig([
     },
     format: ["esm", "cjs"],
     dts: true,
+    // Emitted for both formats, but package.json's `files` publishes only the
+    // ESM ones. The four .cjs.map files were 330 KB of a 874 KB package — more
+    // than a third of every install — to debug a build consumed by `require()`
+    // in Node and Jest, where the stack trace is read in the bundled file
+    // anyway. Bundlers and browser devtools use the ESM maps, which still ship.
     sourcemap: true,
     clean: true,
     target: "es2020",

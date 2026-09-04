@@ -102,4 +102,7 @@ test("package.json points the CDN fields at that bundle", () => {
     assert.equal(pkg.peerDependenciesMeta[framework].optional, true);
   }
   assert.ok(!("@angular/core" in (pkg.peerDependencies ?? {})), "the angular entry imports no Angular");
+  // The CJS sourcemaps are built but not published: four of them were a third
+  // of the installed package. Dropping the negation would silently restore that.
+  assert.ok(pkg.files.includes("!dist/*.cjs.map"), "CJS sourcemaps must stay unpublished");
 });
