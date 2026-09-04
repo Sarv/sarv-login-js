@@ -203,10 +203,28 @@ button.addEventListener("sarv-login", (event) => {
 | `theme`        | `theme`       | `light`, `dark`, `auto`         | `auto`               |
 | `full-width`   | `fullWidth`   | boolean attribute               | off                  |
 | `disabled`     | `disabled`    | boolean attribute               | off                  |
+| `href`         | `href`        | any URL                         | —                    |
 
 `client-id` and `redirect-uri` are optional: leave them off and the button is a
 styled trigger that only fires the `sarv-login` event, which is what you want
 when your app starts the flow itself.
+
+### Link mode, for a backend-driven flow
+
+Give the button an `href` and it renders an `<a>` instead of a `<button>`: the
+browser simply follows the link, and the page starts no flow of its own. That is
+the shape you want when your **server** owns the OAuth exchange — point it at
+your own start-of-flow route and nothing about PKCE ever happens in the browser.
+
+```html
+<sarv-login-button href="/auth/sarv/start"></sarv-login-button>
+```
+
+The `sarv-login` event still fires, so you can track the click or cancel it with
+`preventDefault()`. `disabled` drops the `href` and sets `aria-disabled="true"`,
+which is what actually makes a link inert. See
+[When your backend owns the flow](#when-your-backend-owns-the-flow) for the
+route on the other end.
 
 ### The `sarv-login` event
 
@@ -265,16 +283,46 @@ The focus ring is `:focus-visible` only, and transitions are dropped under
 
 ```
 SarvLoginClient
-  .createAuthorizeUrl()   -> stores a fresh verifier + state, returns the URL
+  .createAuthorizeUrl()   -> stores a fresh verifier + state + nonce, returns the URL
   .login()                -> the above, then navigates
-  .handleCallback(search?) -> verifies state, returns { code, codeVerifier, ... }
+  .handleCallback(search?) -> verifies state, returns { code, codeVerifier, nonce, ... }
   .exchangeCode(result)   -> tokens, IN THE BROWSER (read the warning below)
   .fetchUser(accessToken) -> the OIDC userinfo profile
+  .revokeToken(token, hint?) -> kills one token
+  .buildLogoutUrl(options?)  -> the end-session URL
+  .logout(options?)          -> revokes, then ends the Sarv session
 ```
 
 Pure helpers, if you would rather assemble it yourself:
 `buildAuthorizeUrl`, `readCallback`, `resolveConfig`, `randomVerifier`,
-`randomState`, `deriveChallenge`, `base64url`.
+`randomState`, `randomNonce`, `deriveChallenge`, `base64url`,
+`decodeJwtPayload`, `nonceProblem`.
+
+### The nonce, and the one thing you must do with it
+
+`createAuthorizeUrl()` mints a `nonce` alongside the verifier and state whenever
+`openid` is in your scopes, and `handleCallback()` hands it back on the result.
+It is the ID token's equivalent of `state`: the server copies it into the token
+verbatim, and **whoever holds that token has to compare the two and refuse a
+mismatch.**
+
+- **`exchangeCode()` does it for you.** It holds the ID token itself, so it
+  checks the claim and throws rather than returning a token minted for a
+  different login.
+- **If your backend exchanges the code** — the recommended path — send the
+  `nonce` along with `code` and `codeVerifier`, and compare it there after the
+  exchange. `nonceProblem(idToken, nonce)` is exported for exactly that, and
+  returns a readable reason or `null`.
+
+A nonce that is generated, sent and returned but never compared is not a weaker
+guard than none. It is no guard at all, and it looks like one. If you are not
+going to check it, at least know that you are not.
+
+For an authorization-code flow this is defence in depth: `state` and PKCE
+already bind the *code* to this browser and this flow. The nonce binds the *ID
+token*, which matters the moment a backend will accept an ID token from anywhere
+other than its own token-endpoint response — and it is what OIDC requires of a
+client that sent one.
 
 ### Where to exchange the code
 
@@ -296,6 +344,360 @@ one backend than across a visitor's five open tabs.
 `crypto.subtle` is only exposed in a secure context, so PKCE needs
 **https://** (or `http://localhost` while developing). The button says so
 explicitly rather than failing silently.
+
+---
+
+## Signing out
+
+Two things have to end, and they have different lifetimes:
+
+- **the tokens your app holds**, which keep working until they expire or are
+  revoked;
+- **the Sarv session cookie**, which is why the next click on "Login with Sarv"
+  signs the same person back in without asking for a password.
+
+Ending only the first leaves a live session at Sarv. Ending only the second
+leaves working tokens in your app. `logout()` does both:
+
+```js
+const login = createLogin({ clientId: "your-client-id", redirectUri: "https://app.example.com/auth/callback" });
+
+await login.logout({
+  tokens: { accessToken, refreshToken },     // omit what you do not hold
+  postLogoutRedirectUri: "https://app.example.com/signed-out",
+  state: "came-from-billing",                // echoed back as ?state=
+});
+```
+
+It revokes the refresh token, then the access token, then navigates to Sarv's
+end-session endpoint, which clears the session and sends the browser to your
+landing page.
+
+**The refresh token goes first, on purpose.** Revoking it takes its whole family
+with it, including access tokens issued under it, so the other order can leave a
+freshly-refreshed access token alive.
+
+**A failed revocation does not stop the redirect.** The user pressed sign out;
+stranding them on a page that still looks signed in because one network call
+failed is worse than a token that outlives its session and expires on its own.
+Failures go to `console.error`.
+
+| Option                  | Default                        | Notes |
+| ----------------------- | ------------------------------ | ----- |
+| `postLogoutRedirectUri` | the **origin** of `redirectUri` | Validated against the origins of your registered redirect URIs, so any path on a registered origin is accepted |
+| `state`                 | —                              | Opaque, echoed back on the landing page |
+| `idTokenHint`           | —                              | Accepted, not acted on; see [ID tokens](#id-tokens) |
+| `tokens`                | none                           | `{ accessToken?, refreshToken? }` |
+
+Both `client_id` and `post_logout_redirect_uri` are always sent, whatever you
+pass. With either one missing the server renders a JSON document in the browser
+window instead of redirecting, and a user who clicked "sign out" would be
+looking at it.
+
+### One token at a time
+
+```js
+await login.revoke(refreshToken, "refresh_token");   // -> true | false
+```
+
+`false` means the server found nothing to revoke — an already-expired or
+already-rotated token, which is the normal answer on a second click, not an
+error. It throws only when the request itself failed.
+
+**Revoking from a browser requires a public client.** Public clients authenticate
+to this endpoint by possession of the token; a confidential client must present
+its `client_secret`, which has no place in a page, so revoke from your backend
+instead. Revocation is rate limited to 10 requests per minute per IP, and one
+`logout()` with both tokens spends two of them.
+
+### If you would rather navigate yourself
+
+```js
+window.location.assign(login.logoutUrl({ state: "s-1" }));
+// or render it: <a href="...">Sign out</a>
+```
+
+---
+
+## When your backend owns the flow
+
+If your server holds the tokens and sets its own session cookie — the "backend
+for frontend" shape — then the browser's only job is to start the flow. Use the
+button in [link mode](#link-mode-for-a-backend-driven-flow) and put the OAuth
+work behind your own routes:
+
+```html
+<sarv-login-button href="/auth/sarv/start"></sarv-login-button>
+<!-- ...and for signing out -->
+<a href="/auth/sarv/logout">Sign out</a>
+```
+
+**PKCE is mandatory here too.** This is the one thing that catches a backend
+ported from another provider: Sarv requires `code_challenge` at `/authorize` and
+`code_verifier` at `/token` from **every** client, confidential ones included. A
+server that sends only `client_id` + `client_secret` + `code` gets
+`400 {"detail":"Missing required parameters for authorization_code grant"}`.
+Generate the verifier on the server, keep it in the session, send it back at
+exchange time.
+
+```js
+import { createHash, randomBytes } from "node:crypto";
+import express from "express";
+
+const OAUTH = "https://oauth.sarv.com";
+const CLIENT_ID = process.env.SARV_CLIENT_ID;
+const CLIENT_SECRET = process.env.SARV_CLIENT_SECRET;      // server only
+const REDIRECT_URI = "https://app.example.com/auth/sarv/callback";
+
+const base64url = (buffer) => buffer.toString("base64url");
+const challengeOf = (verifier) => base64url(createHash("sha256").update(verifier).digest());
+
+const app = express();
+
+// 1. Start: mint state + verifier + nonce, keep them in the session, redirect.
+app.get("/auth/sarv/start", (req, res) => {
+  const verifier = base64url(randomBytes(32));
+  const state = base64url(randomBytes(16));
+  const nonce = base64url(randomBytes(16));                // distinct from state, on purpose
+  req.session.sarv = { verifier, state, nonce };           // never in a cookie the page can read
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
+    scope: "openid email profile",
+    state,
+    nonce,                                                 // comes back inside the id_token
+    code_challenge: challengeOf(verifier),
+    code_challenge_method: "S256",                         // the only method accepted
+  });
+  res.redirect(`${OAUTH}/api/oauth/authorize?${params}`);
+});
+
+// 2. Callback: check state, exchange with BOTH the secret and the verifier.
+app.get("/auth/sarv/callback", async (req, res, next) => {
+  try {
+    const pending = req.session.sarv;
+    delete req.session.sarv;                               // single use
+    if (!pending || req.query.state !== pending.state) return res.status(400).send("bad state");
+
+    const response = await fetch(`${OAUTH}/api/oauth/token`, {
+      method: "POST",
+      // JSON, not form encoding - see The wire protocol below.
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        grant_type: "authorization_code",
+        code: req.query.code,
+        redirect_uri: REDIRECT_URI,                        // verbatim, same string as above
+        code_verifier: pending.verifier,                   // required, even with a secret
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,                      // confidential clients only
+      }),
+    });
+    if (!response.ok) throw new Error(`token exchange failed (${response.status}): ${await response.text()}`);
+    const tokens = await response.json();
+
+    // 3. Check the nonce. Not optional: we sent one, so OIDC requires us to
+    //    compare it, and an id_token whose nonce is not ours was minted for a
+    //    different login. Reading the claim without verifying the signature is
+    //    fine HERE and only here — this token came straight back from the token
+    //    endpoint over TLS, not from something a browser handed us.
+    if (tokens.id_token) {
+      const idClaims = JSON.parse(Buffer.from(tokens.id_token.split(".")[1], "base64url"));
+      if (idClaims.nonce !== pending.nonce) return res.status(400).send("bad nonce");
+    }
+
+    // 4. Your session, your cookie. The page never sees a token.
+    req.session.tokens = tokens;
+    const claims = JSON.parse(Buffer.from(tokens.access_token.split(".")[1], "base64url"));
+    req.session.userId = claims.sub;                       // the stable identity key
+    res.redirect("/");
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 5. Sign out: revoke, drop your session, then end the Sarv session.
+app.get("/auth/sarv/logout", async (req, res, next) => {
+  try {
+    const { access_token, refresh_token } = req.session.tokens ?? {};
+    for (const [token, hint] of [[refresh_token, "refresh_token"], [access_token, "access_token"]]) {
+      if (!token) continue;
+      await fetch(`${OAUTH}/api/oauth/revoke`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, token_type_hint: hint, client_id: CLIENT_ID, client_secret: CLIENT_SECRET }),
+      }).catch((error) => console.error("revoke failed, signing out anyway", error));
+    }
+    req.session.destroy(() => {
+      const params = new URLSearchParams({
+        client_id: CLIENT_ID,
+        post_logout_redirect_uri: "https://app.example.com/signed-out",
+      });
+      res.redirect(`${OAUTH}/api/oauth/logout?${params}`);
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+```
+
+Refreshing is the same endpoint with `grant_type: "refresh_token"` and a
+`refresh_token` instead of the code. **Rotation is enforced:** each refresh
+returns a new refresh token and invalidates the one you used, and replaying a
+used one revokes the whole authorization. Refresh in one place, one request in
+flight at a time — which is exactly why this shape is easier to get right than
+refreshing across a visitor's five open tabs.
+
+---
+
+## The wire protocol
+
+For a backend, a mobile app, or a resource server that is not using this
+package. Everything below is what the server does today, not what the spec says
+it should.
+
+### Endpoints
+
+Base: `https://oauth.sarv.com`. Discovery is live, so read it rather than
+hard-coding this table:
+
+```
+GET /.well-known/openid-configuration
+GET /.well-known/jwks.json
+```
+
+| Endpoint | Method | Body | Authentication | Rate limit |
+| -------- | ------ | ---- | -------------- | ---------- |
+| `/api/oauth/authorize` | GET | query string | — | 20/min |
+| `/api/oauth/token` | POST | **JSON** | PKCE, plus `client_secret` if confidential | 20/min |
+| `/api/oauth/userinfo` | GET | — | `Authorization: Bearer` | 30/min |
+| `/api/oauth/revoke` | POST | **JSON** | the token itself, plus `client_secret` if confidential | 10/min |
+| `/api/oauth/introspect` | POST | **JSON** | as revoke | 30/min |
+| `/api/oauth/logout` | GET | query string | `client_id` + `post_logout_redirect_uri` | 20/min |
+
+Limits are per IP, and a `429` is a rate limit rather than anything about your
+credentials.
+
+### Two deviations worth knowing before you write the client
+
+**1. The token endpoint takes JSON.** RFC 6749 says
+`application/x-www-form-urlencoded`; this server parses a JSON body. Most OAuth
+libraries form-encode by default and will fail here — check yours, or make the
+call by hand as in the recipe above.
+
+**2. Errors are `{"detail": "..."}`.** Not the RFC's
+`{"error": "...", "error_description": "..."}` — the OpenAPI schema advertises
+that shape but the running code answers with FastAPI's, so branch on the HTTP
+status and treat `detail` as human-readable text, never as a machine code:
+
+```json
+400 {"detail": "Missing required parameters for authorization_code grant"}
+401 {"detail": "Invalid client credentials"}
+```
+
+### Authorization request
+
+| Parameter | Required | Notes |
+| --------- | -------- | ----- |
+| `response_type` | yes | `code` — the only one supported |
+| `client_id` | yes | |
+| `redirect_uri` | yes | Compared as a whole string against the client's registered URIs; a trailing slash is a different URI. A client may register several |
+| `scope` | yes | space separated |
+| `state` | yes | |
+| `code_challenge` | yes | 43-128 characters, for every client type |
+| `code_challenge_method` | yes | `S256`; `plain` is rejected |
+| `nonce` | no | Echoed into the `id_token` verbatim, up to 255 characters. Survives the consent screen and the KYC verification detour. Omit it rather than sending it empty |
+
+### Token response
+
+```json
+{
+  "access_token": "eyJ...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "...",
+  "id_token": "eyJ...",
+  "scope": "openid email profile"
+}
+```
+
+Refresh tokens come back on the authorization-code grant without asking for
+`offline_access`. `id_token` is present when `openid` was granted, on the code
+exchange and on every refresh.
+
+### Access tokens are verifiable offline
+
+The access token is an RS256 JWT with a `kid` in its header, so a resource server
+can verify it against `jwks.json` and skip a network call per request. Cache the
+keys; verify `iss`, `exp`, the signature, and then pin the audience yourself.
+
+```json
+{
+  "iss": "https://oauth.sarv.com",
+  "sub": "9f1c...",             // the user - stable, opaque, your join key
+  "aud": "your-client-id",
+  "exp": 1767225600,
+  "iat": 1767222000,
+  "jti": "…",                   // unique per token
+  "scope": "openid email profile",
+  "client_id": "your-client-id",
+  "email": "person@example.com", // with scope email or openid
+  "email_verified": true,
+  "name": "A Person"             // with scope profile or openid
+}
+```
+
+There is no `azp` claim: the client is in `aud` and in `client_id`. Revocation is
+not visible in the token, so a token that must be checked against revocation has
+to go through `/api/oauth/introspect` — which is the trade a self-contained token
+always makes.
+
+### Identity
+
+`sub` is the key to store. It is stable for a user across every client, and it
+does not change when they change their email or their name — so joining on
+`email` will one day merge or split two accounts that were never the same person.
+
+`GET /api/oauth/userinfo` with a bearer token returns `sub`, `email`,
+`email_verified`, `name`, `profile`, `phone_number`, `phone_number_verified`.
+
+**No roles, groups or permissions are exposed** — not in the token, not in
+userinfo. Sarv says who someone is; what they may do in your app is your app's
+to decide.
+
+### ID tokens
+
+`openid` in your scopes gets you an `id_token` beside the access token, on the
+code exchange and on every refresh. It is an RS256 JWT carrying `iss`, `sub`,
+`aud`, `exp`, `iat`, `jti`, `at_hash`, `auth_time`, your `nonce` if you sent
+one, and `email` / `email_verified` / `name` by scope. Conformant OIDC client
+libraries — NextAuth's `openid` provider, Spring Security's OIDC login,
+`passport-openidconnect` — work against it.
+
+**An ID token is not a credential.** It is a signed statement to *you* that a
+user just authenticated, meant to be read once and discarded. Never send it to
+an API as a bearer token, and if you build an API, never accept one:
+
+- Access tokens carry `typ: "at+jwt"` in the header; ID tokens carry `typ: "JWT"`.
+- Access tokens carry a `scope` claim. **ID tokens deliberately carry none**, so
+  an API that requires a scope cannot be talked into accepting one.
+
+Both are signed by the same key with the same `iss` and the same `aud`, so a
+signature check alone does not tell them apart. Those two differences are what
+does.
+
+`id_token_hint` at the logout endpoint is still accepted and not acted on: the
+server ends the session it finds from the session cookie, which is the session
+a top-level navigation to the logout endpoint carries anyway.
+
+### Scopes
+
+`openid`, `email`, `profile` and `phone` are the identity scopes, and are what
+discovery lists. Product scopes exist as well and are granted per client — the
+mail relay's `email:send` is one — so a client's real allow-list is what the
+developer console shows for that client, which can be wider than
+`scopes_supported`. Ask for what you will use: the consent screen names every
+scope, and a long list is the most common reason people decline.
 
 ---
 

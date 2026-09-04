@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **OIDC `nonce` support.** `createAuthorizeUrl()` now mints a nonce alongside
+  the verifier and state whenever `openid` is among the scopes, sends it with the
+  authorization request, and `handleCallback()` returns it on the result. It is
+  the ID token's equivalent of `state`: the server copies it into the token
+  verbatim, and comparing the two is what refuses a token minted for a different
+  login.
+  **`exchangeCode()` does the comparison itself** and throws on a mismatch,
+  because a nonce that travels the whole round trip and is never checked is not
+  a weaker guard than none — it is no guard at all while looking exactly like
+  one. If your backend does the exchange, send the returned `nonce` with the code
+  and compare it there; `nonceProblem(idToken, nonce)` is exported for that and
+  returns a readable reason or `null`.
+  No nonce is minted without the `openid` scope, since no ID token is issued
+  then and the value could never be compared against anything.
+- `randomNonce()`, `decodeJwtPayload()` and `nonceProblem()` are exported, along
+  with the `NONCE_KEY` storage key. `decodeJwtPayload` reads claims and
+  **does not verify the signature** — it is for reading a token you already
+  trust the source of, never for deciding whether to trust one.
+- Signing out. `logout()` revokes the tokens you hold and then ends the Sarv
+  session, in that order, because revoking a refresh token takes the access
+  tokens issued under it with it. A failed revocation is reported but does not
+  stop the redirect — the user pressed sign out.
+- `revoke(token, hint?)` for one token at a time, and `logoutUrl(options?)` for
+  an app that would rather render a link or navigate itself.
+- Link mode: an `href` on `<sarv-login-button>` renders an anchor instead of a
+  button and starts no flow in the page, for apps whose backend owns the OAuth
+  exchange. `disabled` drops the `href` and sets `aria-disabled`, which is what
+  actually makes a link inert.
+- Wire-protocol reference in the README — every endpoint with its rate limit,
+  the token endpoint's JSON body, the `{"detail": "..."}` error shape, the
+  access token's claims, and the fact that `sub` rather than `email` is the
+  identity to store.
+- A backend (BFF) integration recipe, with the whole Express route pair. PKCE is
+  mandatory for confidential clients here too, which is the one thing that makes
+  a backend ported from another provider fail with
+  `400 Missing required parameters`. It mints and compares a nonce, and reads
+  `sub` from the access token for the session key.
+
+### Changed
+
+- **`extraParams.nonce` now throws.** Before nonce support it was the only way
+  to send one and is what the docs suggested. It has to be reserved now: left
+  through, the `extraParams` spread would overwrite the nonce in the URL while
+  the store still held ours, so every login would fail its own comparison and
+  it would look like a server bug. Delete the `extraParams` entry — the nonce is
+  generated for you.
+- The README's ID-token section said the token endpoint returns no `id_token`
+  and that a conformant OIDC client library would fail against this server.
+  Both were true when written and are not now: `openid` gets you an `id_token`,
+  and NextAuth, Spring Security and `passport-openidconnect` work against it.
+  The section now also documents how to tell an ID token from an access token —
+  `typ: "at+jwt"` versus `typ: "JWT"`, and the `scope` claim that ID tokens
+  deliberately do not carry — because both are signed by the same key with the
+  same `iss` and `aud`, so a signature check alone does not distinguish them.
+- `idTokenHint` is documented as accepted but not acted on, which remains
+  true — the reason given for it ("this server does not mint ID tokens") no
+  longer is. The server ends the session its cookie identifies, which a
+  top-level navigation to the logout endpoint carries anyway.
+
 ## [1.0.0] - 2026-09-03
 
 First public release.
