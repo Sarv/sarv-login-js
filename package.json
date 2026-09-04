@@ -1,6 +1,6 @@
 {
   "name": "@sarv-in/login",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Login with Sarv - the official login button and OAuth 2.1 + PKCE client for the Sarv identity server.",
   "keywords": [
     "sarv",
