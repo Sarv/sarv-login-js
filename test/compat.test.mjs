@@ -74,6 +74,37 @@ test("createLogin().handleCallback reads a callback and clears the one-time valu
   assert.equal(window.sessionStorage.getItem("sarv_code_verifier"), null, "the verifier is single-use");
 });
 
+test("createLogin exposes signing out as well as signing in", async () => {
+  clear();
+  const login = createLogin({
+    clientId: "demo",
+    redirectUri: "https://app.example.com/auth/callback",
+    oauthUrl: "https://oauth.example.com",
+  });
+
+  // The same config that started the flow ends the session, so an integrator
+  // never repeats a client id to sign someone out.
+  const url = new URL(login.logoutUrl({ state: "s-1" }));
+  assert.equal(url.origin + url.pathname, "https://oauth.example.com/api/oauth/logout");
+  assert.equal(url.searchParams.get("client_id"), "demo");
+  assert.equal(url.searchParams.get("post_logout_redirect_uri"), "https://app.example.com");
+  assert.equal(url.searchParams.get("state"), "s-1");
+
+  // `revoke` is the single-token version, for an app that manages its own
+  // session and only wants one token killed.
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ revoked: true }) });
+  try {
+    assert.equal(await login.revoke("at", "access_token"), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  await login.logout();
+  assert.equal(navigations.length, 1, "logout must navigate to the end-session endpoint");
+  assert.equal(new URL(navigations[0]).pathname, "/api/oauth/logout");
+});
+
 test("SarvAuth refuses to work before init, and says which call is missing", () => {
   const { SarvAuth } = window;
   assert.throws(() => SarvAuth.login(), /SarvAuth\.init/);

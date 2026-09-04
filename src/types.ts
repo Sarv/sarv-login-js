@@ -71,6 +71,50 @@ export interface SarvCallbackError {
   error_description?: string;
 }
 
+/**
+ * Signing out. Two separate things happen, and both are needed.
+ *
+ * Revoking kills the TOKENS your app holds. The end-session redirect kills the
+ * SARV SESSION COOKIE, so the next visitor at the same keyboard is not silently
+ * signed in. Doing only the first leaves a live session at the IdP; doing only
+ * the second leaves working tokens in your app. `logout()` does both, in that
+ * order, because a revoked token cannot be used while the redirect is in
+ * flight.
+ */
+export interface SarvLogoutOptions {
+  /**
+   * Where Sarv sends the browser after signing out.
+   *
+   * Defaults to the ORIGIN of `redirectUri`, which is the one value guaranteed
+   * to pass the server's check: it validates this against the origins of the
+   * client's registered redirect URIs, not against a dedicated allow-list. Pass
+   * a full URL to land somewhere specific — any path on a registered origin is
+   * accepted, so `https://app.example.com/signed-out` works when only
+   * `https://app.example.com/auth/callback` is registered.
+   */
+  postLogoutRedirectUri?: string;
+  /** Opaque value echoed back as `?state=` on the landing page. */
+  state?: string;
+  /**
+   * Advisory. The spec has the RP pass its ID token so the IdP can tell which
+   * session to end; this server accepts the parameter but does not act on it,
+   * because it ends the session it finds from the session cookie — which a
+   * top-level navigation to the logout endpoint carries anyway. Kept in the
+   * signature: it is a legitimate parameter, and code written against it stops
+   * needing a change the day the server starts honouring it.
+   */
+  idTokenHint?: string;
+  /**
+   * Tokens to revoke before the redirect. Omit what you do not hold — a
+   * frontend that let its backend do the exchange usually holds neither, and
+   * should call this with no tokens and let its backend revoke.
+   */
+  tokens?: {
+    accessToken?: string;
+    refreshToken?: string;
+  };
+}
+
 export type SarvTheme = "light" | "dark" | "auto";
 export type SarvSize = "sm" | "md" | "lg";
 export type SarvVariant = "brand" | "surface";

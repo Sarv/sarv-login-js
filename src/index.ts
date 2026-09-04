@@ -36,6 +36,7 @@ export type {
   SarvCallbackError,
   SarvCallbackResult,
   SarvLoginConfig,
+  SarvLogoutOptions,
   SarvSize,
   SarvTheme,
   SarvTokenResponse,
@@ -45,7 +46,7 @@ export type {
 import { defineSarvLoginButton, renderButton } from "./button.js";
 import { createLegacyApi } from "./compat.js";
 import { isCallbackError, SarvLoginClient } from "./flow.js";
-import type { SarvButtonOptions, SarvLoginConfig } from "./types.js";
+import type { SarvButtonOptions, SarvLoginConfig, SarvLogoutOptions } from "./types.js";
 
 /** Kept in step with package.json by `npm version` (see scripts/sync-version.mjs). */
 export const version = "1.0.0";
@@ -61,6 +62,14 @@ export function createLogin(config: SarvLoginConfig) {
     client,
     login: () => client.login(),
     handleCallback: (search?: string) => client.handleCallback(search),
+    // Signing out is two operations against two different lifetimes — your
+    // tokens and the Sarv session cookie. `logout` does both in the order that
+    // cannot leave one of them alive; `revoke` is the single-token version for
+    // apps that manage the session themselves.
+    logout: (options?: SarvLogoutOptions) => client.logout(options),
+    revoke: (token: string, hint?: "access_token" | "refresh_token") =>
+      client.revokeToken(token, hint),
+    logoutUrl: (options?: SarvLogoutOptions) => client.buildLogoutUrl(options),
     mount: (target: string | Element, options: SarvButtonOptions = {}) =>
       renderButton(target, { ...config, ...options }),
   };

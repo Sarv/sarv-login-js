@@ -11,6 +11,7 @@ import type {
   SarvCallbackError,
   SarvCallbackResult,
   SarvLoginConfig,
+  SarvLogoutOptions,
   SarvTokenResponse,
 } from "./types.js";
 
@@ -372,6 +373,114 @@ export class SarvLoginClient {
       throw new Error(`Sarv login: userinfo failed (${response.status}).`);
     }
     return (await response.json()) as Record<string, unknown>;
+  }
+
+  /**
+   * Revokes one token.
+   *
+   * Resolves to whether the server found something to revoke. That is not the
+   * same as success: `false` is the normal answer for a token that had already
+   * expired or been rotated, which is why this does not throw on it. It throws
+   * only when the request itself failed — a wrong `client_id`, or no network.
+   *
+   * No client secret is sent. For this endpoint the server treats possession of
+   * the token as the proof, exactly as it does for PKCE at the token endpoint,
+   * so a public client can revoke its own tokens and nothing else.
+   */
+  async revokeToken(
+    token: string,
+    tokenTypeHint?: "access_token" | "refresh_token"
+  ): Promise<boolean> {
+    const response = await fetch(`${this.config.oauthUrl}/api/oauth/revoke`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        token,
+        // Sent only when known. The server uses it to look in the right table
+        // first; a wrong hint costs a second lookup, a missing one costs one.
+        ...(tokenTypeHint ? { token_type_hint: tokenTypeHint } : {}),
+        client_id: this.config.clientId,
+      }),
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(
+        `Sarv login: revoke failed (${response.status}). ${detail.slice(0, 300)}`
+      );
+    }
+    const body = (await response.json().catch(() => ({}))) as { revoked?: boolean };
+    return body.revoked === true;
+  }
+
+  /**
+   * Where to send the browser to end the Sarv session.
+   *
+   * `client_id` and `post_logout_redirect_uri` are ALWAYS both sent, and that is
+   * not belt-and-braces. The server only validates the landing page when it has
+   * a client to validate against; with either one missing it renders a JSON
+   * document — `{"message":"Signed out of Sarv OAuth"}` — in the browser
+   * window. Raw JSON shown to a user who clicked "sign out" is the failure this
+   * prevents.
+   */
+  buildLogoutUrl(options: SarvLogoutOptions = {}): string {
+    const params = new URLSearchParams({
+      client_id: this.config.clientId,
+      post_logout_redirect_uri:
+        options.postLogoutRedirectUri ?? defaultPostLogoutUri(this.config.redirectUri),
+    });
+    if (options.state) params.set("state", options.state);
+    if (options.idTokenHint) params.set("id_token_hint", options.idTokenHint);
+    return `${this.config.oauthUrl}/api/oauth/logout?${params.toString()}`;
+  }
+
+  /**
+   * Signs out: revokes what you hold, then ends the Sarv session.
+   *
+   * The refresh token goes first. Revoking it takes its whole family with it,
+   * including access tokens issued under it, so the reverse order can leave a
+   * fresh access token alive that the refresh revocation would have caught.
+   *
+   * A failed revocation does NOT stop the redirect. The user pressed sign out;
+   * stranding them on a page that still looks signed in because a network call
+   * failed is worse than a token that outlives its session and expires on its
+   * own. Failures are reported on the console rather than thrown, since the
+   * navigation makes any rejection unobservable anyway.
+   */
+  async logout(options: SarvLogoutOptions = {}): Promise<void> {
+    const { accessToken, refreshToken } = options.tokens ?? {};
+    for (const [token, hint] of [
+      [refreshToken, "refresh_token"],
+      [accessToken, "access_token"],
+    ] as const) {
+      if (!token) continue;
+      try {
+        await this.revokeToken(token, hint);
+      } catch (error) {
+        console.error(`Sarv login: could not revoke the ${hint}, signing out anyway.`, error);
+      }
+    }
+    // Our own one-time values, in case a flow was abandoned mid-redirect.
+    // Cheap, and it stops a stale verifier being paired with a later code.
+    this.store.removeItem(STATE_KEY);
+    this.store.removeItem(VERIFIER_KEY);
+    this.store.removeItem(NONCE_KEY);
+    globalThis.location?.assign(this.buildLogoutUrl(options));
+  }
+}
+
+/** The origin of the registered redirect URI.
+ *
+ *  The server validates a post-logout landing page by comparing its origin to
+ *  the origins of the client's registered redirect URIs, so the origin of the
+ *  URI this client already uses cannot fail that check. A `redirectUri` that
+ *  will not parse falls back to the empty string, which the server then simply
+ *  declines to redirect to — a wrong-looking landing page, never an exception
+ *  thrown out of a sign-out button. */
+function defaultPostLogoutUri(redirectUri: string): string {
+  try {
+    return new URL(redirectUri).origin;
+  } catch {
+    return "";
   }
 }
 
