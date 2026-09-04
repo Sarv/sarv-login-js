@@ -53,7 +53,7 @@ import { isCallbackError, SarvLoginClient } from "./flow.js";
 import type { SarvButtonOptions, SarvLoginConfig, SarvLogoutOptions } from "./types.js";
 
 /** Kept in step with package.json by `npm version` (see scripts/sync-version.mjs). */
-export const version = "1.2.0";
+export const version = "1.2.1";
 
 /**
  * One-call convenience for the common case: render a button that starts the
