@@ -54,6 +54,18 @@ export interface SarvLoginButtonElement extends HTMLElement {
   theme: SarvTheme;
   fullWidth: boolean;
   disabled: boolean;
+  /**
+   * Turns the button into a real link, for apps whose BACKEND runs the OAuth
+   * flow. Set it and the element renders an `<a href>` instead of a `<button>`,
+   * and starts no flow of its own — the browser just follows the link.
+   *
+   * This is the shape a backend-for-frontend integration wants: point it at
+   * your own `/auth/login`, let your server mint state and PKCE, and no token
+   * ever reaches the page. It is a genuine anchor, so middle-click, ctrl-click,
+   * "open in new tab" and right-click-copy-link all behave, and it still works
+   * with JavaScript disabled — none of which a click handler can imitate.
+   */
+  href: string | null;
   /** Starts the flow immediately, as a click would. */
   login(): Promise<void>;
 }
@@ -70,6 +82,7 @@ const OBSERVED = [
   "theme",
   "full-width",
   "disabled",
+  "href",
 ] as const;
 
 /** Reads an attribute against a fixed set, falling back rather than throwing:
@@ -77,6 +90,17 @@ const OBSERVED = [
 function oneOf<T extends string>(value: string | null, allowed: T[], fallback: T): T {
   return allowed.includes(value as T) ? (value as T) : fallback;
 }
+
+/** Is the trigger the anchor variant?
+ *
+ *  A tag test, not `instanceof HTMLAnchorElement`. Those constructors are
+ *  per-realm: an element created in another document — an iframe, a template
+ *  moved between documents — fails the instanceof while being exactly the right
+ *  element. `tagName` is always uppercase for HTML elements and needs no global
+ *  to be defined, which also keeps this working under SSR-shaped test DOMs. */
+const isAnchor = (
+  node: HTMLButtonElement | HTMLAnchorElement
+): node is HTMLAnchorElement => node.tagName === "A";
 
 let ButtonClass: CustomElementConstructor | undefined;
 
@@ -97,8 +121,13 @@ function buildButtonClass(): CustomElementConstructor {
     }
 
     private readonly root: ShadowRoot;
-    private readonly button: HTMLButtonElement;
+    /** A <button>, or an <a> when `href` is set. Swapped in place by
+     *  `ensureTrigger()`, which is why this one is not readonly. */
+    private trigger: HTMLButtonElement | HTMLAnchorElement;
     private readonly styleTag: HTMLStyleElement;
+    /** Held as fields so the swap can move them into the new trigger rather
+     *  than rebuild the mark's SVG on every mode change. */
+    private readonly mark: HTMLSpanElement;
     private readonly labelSpan: HTMLSpanElement;
     private lastCss = "";
 
@@ -117,27 +146,21 @@ function buildButtonClass(): CustomElementConstructor {
       this.root = this.attachShadow({ mode: "open", delegatesFocus: true });
       this.styleTag = document.createElement("style");
 
-      this.button = document.createElement("button");
-      // A real <button type="button">, not a styled div: it must be reachable
-      // by Tab, activate on Space and Enter, and be announced as a button,
-      // and `type` stops it submitting a form it happens to sit inside.
-      this.button.type = "button";
-      this.button.className = "sarv-login-btn";
-      this.button.part = "button";
-
-      const mark = document.createElement("span");
-      mark.className = "sarv-login-mark";
-      mark.part = "mark";
+      this.mark = document.createElement("span");
+      this.mark.className = "sarv-login-mark";
+      this.mark.part = "mark";
       // Static, generated markup from our own asset — no user input reaches it.
-      mark.innerHTML = SARV_MARK_SVG;
+      this.mark.innerHTML = SARV_MARK_SVG;
 
       this.labelSpan = document.createElement("span");
       this.labelSpan.className = "sarv-login-label";
       this.labelSpan.part = "label";
 
-      this.button.append(mark, this.labelSpan);
-      this.root.append(this.styleTag, this.button);
-      this.button.addEventListener("click", this.onClick);
+      // A button by default; `render()` swaps in an anchor if `href` is set.
+      // The constructor cannot decide, because attributes are not readable
+      // here when the element is created by `document.createElement`.
+      this.trigger = this.makeTrigger("button");
+      this.root.append(this.styleTag, this.trigger);
     }
 
     connectedCallback(): void {
@@ -217,6 +240,13 @@ function buildButtonClass(): CustomElementConstructor {
       this.toggleAttribute("full-width", !!value);
     }
 
+    get href(): string | null {
+      return this.getAttribute("href");
+    }
+    set href(value: string | null) {
+      this.reflect("href", value);
+    }
+
     get disabled(): boolean {
       return this.hasAttribute("disabled");
     }
@@ -251,7 +281,12 @@ function buildButtonClass(): CustomElementConstructor {
     }
 
     private readonly onClick = (event: MouseEvent): void => {
-      if (this.disabled) return;
+      // preventDefault matters now that the trigger can be an anchor: without
+      // it a disabled or host-handled link would still navigate.
+      if (this.disabled) {
+        event.preventDefault();
+        return;
+      }
       const proceed = this.dispatchEvent(
         new CustomEvent(LOGIN_EVENT, {
           // Crosses the shadow boundary and bubbles to the host's listeners,
@@ -263,7 +298,14 @@ function buildButtonClass(): CustomElementConstructor {
         })
       );
       // preventDefault() on the event means "I will handle it".
-      if (!proceed) return;
+      if (!proceed) {
+        event.preventDefault();
+        return;
+      }
+      // In link mode the anchor's own navigation IS the behaviour. The event
+      // above still fires, so a host can observe or cancel the click, but this
+      // element must not also start a flow of its own.
+      if (this.href !== null) return;
       if (!this.readConfig()) {
         // Nothing configured at all: the element is a styled trigger and the
         // host's own listener is the whole behaviour, so silence is correct.
@@ -280,6 +322,42 @@ function buildButtonClass(): CustomElementConstructor {
       }
       void this.login();
     };
+
+    /** Builds a trigger of either kind, styled identically. */
+    private makeTrigger(kind: "button" | "a"): HTMLButtonElement | HTMLAnchorElement {
+      const node = document.createElement(kind);
+      if (kind === "button") {
+        // A real <button type="button">, not a styled div: it must be reachable
+        // by Tab, activate on Space and Enter, and be announced as a button,
+        // and `type` stops it submitting a form it happens to sit inside.
+        (node as HTMLButtonElement).type = "button";
+      }
+      node.className = "sarv-login-btn";
+      node.part = "button";
+      node.append(this.mark, this.labelSpan);
+      // Cast because createElement over a union of tag names widens to the
+      // base addEventListener signature, which types the argument as `Event`.
+      // A click on a button or an anchor is a MouseEvent either way.
+      node.addEventListener("click", this.onClick as EventListener);
+      return node;
+    }
+
+    /** Swaps <button> for <a> when `href` appears, and back when it goes.
+     *
+     *  A swap rather than an always-anchor: an anchor with no href is not
+     *  focusable and is announced as plain text, so the default button would
+     *  quietly lose its keyboard behaviour if the two shared one node. */
+    private ensureTrigger(): void {
+      const wantsAnchor = this.href !== null;
+      if (wantsAnchor === isAnchor(this.trigger)) return;
+      const next = this.makeTrigger(wantsAnchor ? "a" : "button");
+      // The old listener goes with the old node, but removing it explicitly
+      // keeps a detached node from holding the closure if a host kept a
+      // reference to it through `part`.
+      this.trigger.removeEventListener("click", this.onClick as EventListener);
+      this.trigger.replaceWith(next);
+      this.trigger = next;
+    }
 
     private reflect(name: string, value: string | null): void {
       if (value === null || value === undefined) this.removeAttribute(name);
@@ -299,8 +377,24 @@ function buildButtonClass(): CustomElementConstructor {
         this.styleTag.textContent = css;
         this.lastCss = css;
       }
+      this.ensureTrigger();
       this.labelSpan.textContent = this.label ?? DEFAULT_LABEL;
-      this.button.disabled = this.disabled;
+      if (isAnchor(this.trigger)) {
+        // An anchor has no `disabled`. Dropping the href is what actually makes
+        // it inert: it stops being activatable AND leaves the tab order, which
+        // is the behaviour a disabled control needs. `aria-disabled` then tells
+        // a screen reader why it is skipped, rather than the control simply
+        // vanishing from the page's semantics.
+        if (this.disabled) {
+          this.trigger.removeAttribute("href");
+          this.trigger.setAttribute("aria-disabled", "true");
+        } else {
+          this.trigger.href = this.href ?? "";
+          this.trigger.removeAttribute("aria-disabled");
+        }
+      } else {
+        this.trigger.disabled = this.disabled;
+      }
     }
   };
 
@@ -341,6 +435,7 @@ export function renderButton(
   if (options.variant) element.variant = options.variant;
   if (options.size) element.size = options.size;
   if (options.theme) element.theme = options.theme;
+  if (options.href) element.href = options.href;
   element.fullWidth = !!options.fullWidth;
   element.disabled = !!options.disabled;
 

@@ -57,6 +57,7 @@ export function SarvLoginButton(props: SarvLoginButtonProps): ReactElement {
     theme,
     fullWidth,
     disabled,
+    href,
     onLogin,
     className,
     style,
@@ -107,6 +108,7 @@ export function SarvLoginButton(props: SarvLoginButtonProps): ReactElement {
     variant,
     size,
     theme,
+    href,
     // Boolean attributes: present or absent. `false` would render
     // `full-width="false"`, which the element reads as present.
     "full-width": fullWidth ? "" : undefined,

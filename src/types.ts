@@ -140,4 +140,14 @@ export interface SarvButtonOptions {
   fullWidth?: boolean;
   /** Rendered but not clickable — for a form that is not yet valid. */
   disabled?: boolean;
+  /**
+   * Turns the trigger into an `<a href>` and stops the button starting a flow
+   * of its own — for an app whose BACKEND owns the OAuth exchange. Point it at
+   * your own start-of-flow route; the browser just follows the link, and no
+   * PKCE verifier ever exists in the page.
+   *
+   * The `sarv-login` event still fires, so a host can observe or cancel the
+   * click. `disabled` drops the href, which is what makes an anchor inert.
+   */
+  href?: string;
 }

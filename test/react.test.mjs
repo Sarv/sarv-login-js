@@ -221,3 +221,15 @@ test("the react entry re-exports the names a host needs", () => {
   assert.equal(TAG_NAME, "sarv-login-button");
   assert.equal(LOGIN_EVENT, "sarv-login");
 });
+
+test("an href prop reaches the element, so a BFF app can use the React button", async () => {
+  // The attribute has to survive SSR: a Next.js page renders this on the server
+  // and the link must be followable before any JavaScript arrives.
+  const html = renderToStaticMarkup(
+    createElement(SarvLoginButton, { href: "/auth/sarv/start" })
+  );
+  assert.match(html, /href="\/auth\/sarv\/start"/);
+
+  const { element } = await render(createElement(SarvLoginButton, { href: "/auth/sarv/start" }));
+  assert.equal(element.shadowRoot.querySelector(".sarv-login-btn").tagName, "A");
+});

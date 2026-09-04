@@ -289,3 +289,132 @@ test("renderButton can append beside a container's contents instead of replacing
   assert.ok(host.querySelector("p"), "replace: false must keep the existing content");
   assert.equal(host.lastElementChild.tagName.toLowerCase(), TAG_NAME, "the button goes last");
 });
+
+/* ---------------------------------------------------------------------------
+ * Link mode.
+ *
+ * An `href` turns the trigger into an <a>, for the app whose backend owns the
+ * OAuth flow: the button points at the backend's own start-of-flow route and
+ * the browser navigates there. Nothing about PKCE happens in the page, which is
+ * the whole reason that shape exists.
+ * ------------------------------------------------------------------------- */
+
+test("an href renders an anchor instead of a button, and drops it again", () => {
+  clear();
+  const element = mount(TAG_NAME, { href: "/auth/sarv/start" });
+  let trigger = innerButton(element);
+
+  assert.equal(trigger.tagName, "A");
+  assert.equal(trigger.getAttribute("href"), "/auth/sarv/start");
+  assert.equal(trigger.hasAttribute("type"), false, "an anchor has no type");
+  assert.equal(
+    element.shadowRoot.querySelector(".sarv-login-label").textContent,
+    DEFAULT_LABEL,
+    "the label survives the swap"
+  );
+  assert.ok(element.shadowRoot.querySelector(".sarv-login-mark svg"), "so does the mark");
+
+  // Removing it must go back to a real button, not leave a hrefless anchor,
+  // which would look identical and no longer be activatable by keyboard.
+  element.href = null;
+  trigger = innerButton(element);
+  assert.equal(trigger.tagName, "BUTTON");
+  assert.equal(trigger.getAttribute("type"), "button");
+  assert.equal(element.shadowRoot.querySelectorAll(".sarv-login-btn").length, 1, "the old trigger was left behind");
+});
+
+test("the href property and attribute reflect each other", () => {
+  clear();
+  const element = mount(TAG_NAME);
+  assert.equal(element.href, null);
+
+  element.href = "https://api.example.com/login";
+  assert.equal(element.getAttribute("href"), "https://api.example.com/login");
+  assert.equal(innerButton(element).getAttribute("href"), "https://api.example.com/login");
+
+  element.setAttribute("href", "/elsewhere");
+  assert.equal(element.href, "/elsewhere");
+  assert.equal(innerButton(element).getAttribute("href"), "/elsewhere");
+});
+
+test("a disabled link loses its href and says why", () => {
+  clear();
+  const element = mount(TAG_NAME, { href: "/auth/sarv/start", disabled: "" });
+  const trigger = innerButton(element);
+
+  // Dropping the href is what makes an anchor inert - it also leaves the tab
+  // order, which is what a disabled control should do. aria-disabled is then
+  // the only thing telling a screen reader why it was skipped.
+  assert.equal(trigger.hasAttribute("href"), false);
+  assert.equal(trigger.getAttribute("aria-disabled"), "true");
+
+  element.disabled = false;
+  assert.equal(trigger.getAttribute("href"), "/auth/sarv/start");
+  assert.equal(trigger.hasAttribute("aria-disabled"), false);
+});
+
+test("in link mode the element starts no flow of its own", async () => {
+  clear();
+  const element = mount(TAG_NAME, {
+    href: "/auth/sarv/start",
+    // Configured as well, to prove the href wins: a page that has both must
+    // not fire a browser-side PKCE redirect behind the link's navigation.
+    "client-id": "demo",
+    "redirect-uri": "https://a.example/cb",
+  });
+
+  const seen = [];
+  on(document, LOGIN_EVENT, (event) => void seen.push(event));
+  innerButton(element).click();
+  await pause();
+
+  assert.equal(seen.length, 1, "the host can still observe the click");
+  assert.equal(navigations.length, 0, "the anchor's own navigation is the behaviour");
+  assert.equal(
+    window.sessionStorage.getItem("sarv_code_verifier"),
+    null,
+    "no verifier belongs in the page when the backend owns the flow"
+  );
+});
+
+test("a cancelled click on a link is not allowed to navigate", async () => {
+  clear();
+  const element = mount(TAG_NAME, { href: "/auth/sarv/start" });
+
+  let cancelled = false;
+  on(document, LOGIN_EVENT, (event) => {
+    event.preventDefault();
+    cancelled = true;
+  });
+
+  const click = new window.MouseEvent("click", { bubbles: true, cancelable: true });
+  innerButton(element).dispatchEvent(click);
+  await pause();
+
+  assert.equal(cancelled, true);
+  assert.equal(click.defaultPrevented, true, "preventDefault on the event must stop the navigation");
+});
+
+test("a disabled link's click is prevented, not merely ignored", async () => {
+  clear();
+  const element = mount(TAG_NAME, { href: "/auth/sarv/start", disabled: "" });
+
+  let fired = 0;
+  on(document, LOGIN_EVENT, () => void (fired += 1));
+  const click = new window.MouseEvent("click", { bubbles: true, cancelable: true });
+  innerButton(element).dispatchEvent(click);
+  await pause();
+
+  assert.equal(fired, 0);
+  assert.equal(click.defaultPrevented, true);
+});
+
+test("renderButton passes an href through, for a backend-driven flow", () => {
+  clear();
+  const host = document.createElement("div");
+  document.body.append(host);
+
+  const element = renderButton(host, { href: "/auth/sarv/start" });
+  assert.equal(element.getAttribute("href"), "/auth/sarv/start");
+  assert.equal(innerButton(element).tagName, "A");
+});
