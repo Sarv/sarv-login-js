@@ -203,13 +203,16 @@ of their own layout.
 `src/index.ts` exports `version`, and `exports.test.mjs` asserts it equals
 `package.json`. `npm run gen:version` rewrites it, and `prebuild` runs it — so
 the published bundle is always correct even if the tagged commit still carries
-the old literal. To keep the repo itself in step, either run `npm run check`
-after `npm version` and commit the result, or add the lifecycle hook that does
-it inside the version commit:
+the old literal. The repo is kept in step too, by a `version` lifecycle hook
+that `npm version` runs before it commits:
 
 ```json
 "version": "npm run gen:version && git add src/index.ts"
 ```
+
+So the literal is rewritten and staged *inside* the version commit, and the
+tagged commit passes its own test suite. Nothing to remember and nothing to
+commit afterwards.
 
 ### Sync the self-hosted copy
 

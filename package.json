@@ -81,6 +81,7 @@
     "test": "node --test test/*.test.mjs",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=97 --test-coverage-branches=90 --test-coverage-functions=95 test/*.test.mjs",
     "check": "npm run typecheck && npm run build && npm test",
+    "version": "npm run gen:version && git add src/index.ts",
     "prepublishOnly": "npm run check"
   },
   "peerDependencies": {
