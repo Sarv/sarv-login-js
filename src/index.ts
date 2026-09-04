@@ -13,9 +13,12 @@ export { defineSarvLoginButton, renderButton, DEFAULT_LABEL, LOGIN_EVENT, TAG_NA
 export type { SarvLoginButtonElement } from "./button.js";
 export {
   buildAuthorizeUrl,
+  decodeJwtPayload,
   DEFAULT_OAUTH_URL,
   DEFAULT_SCOPES,
   isCallbackError,
+  NONCE_KEY,
+  nonceProblem,
   readCallback,
   resolveConfig,
   SarvLoginClient,
@@ -23,7 +26,7 @@ export {
   VERIFIER_KEY,
 } from "./flow.js";
 export type { KeyValueStore, ResolvedConfig } from "./flow.js";
-export { base64url, deriveChallenge, randomState, randomVerifier } from "./pkce.js";
+export { base64url, deriveChallenge, randomNonce, randomState, randomVerifier } from "./pkce.js";
 export { DARK, LIGHT, METRICS, SIZES } from "./tokens.js";
 export type { Palette, SizeName } from "./tokens.js";
 export { buttonCss } from "./styles.js";

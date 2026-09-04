@@ -6,7 +6,7 @@
  * redirect, fetch) live in `SarvLoginClient`, at the edge, where a test can
  * hand in a fake store instead of a real one.
  */
-import { deriveChallenge, randomState, randomVerifier } from "./pkce.js";
+import { deriveChallenge, randomNonce, randomState, randomVerifier } from "./pkce.js";
 import type {
   SarvCallbackError,
   SarvCallbackResult,
@@ -21,6 +21,11 @@ export const DEFAULT_SCOPES = ["openid", "email", "profile"];
  *  page mid-flow when the bundle is swapped still finds its verifier. */
 export const VERIFIER_KEY = "sarv_code_verifier";
 export const STATE_KEY = "sarv_oauth_state";
+/** The OIDC nonce. A new key rather than one of the two above: the 1.x SDK never
+ *  wrote it, so there is no legacy name to match, and a page mid-flow across a
+ *  bundle swap simply has no nonce to check — which `readCallback` treats as
+ *  "not requested" rather than as a failure. */
+export const NONCE_KEY = "sarv_oidc_nonce";
 
 /** Parameters this SDK owns. A caller's `extraParams` may not set them: quietly
  *  letting one through would either break PKCE or, worse, disable the CSRF
@@ -33,6 +38,13 @@ const RESERVED_PARAMS = new Set([
   "state",
   "code_challenge",
   "code_challenge_method",
+  // Reserved as of the release that added nonce support. Before it, passing one
+  // through `extraParams` was the only way to get a nonce and is what the docs
+  // suggested; that now throws, deliberately and loudly. Left unreserved, the
+  // `...config.extraParams` spread below would overwrite the nonce in the URL
+  // while the store still held ours — every login would fail the comparison,
+  // and it would look like a server bug.
+  "nonce",
 ]);
 
 /** The minimum a session-storage-shaped thing has to do. */
@@ -70,14 +82,19 @@ export function resolveConfig(config: SarvLoginConfig): ResolvedConfig {
 /**
  * The authorization request URL.
  *
- * `state` and `codeChallenge` are arguments rather than generated inside,
- * because the caller has to persist the verifier that matches the challenge —
- * generating either one here would hide half a pair inside a pure function.
+ * `state`, `codeChallenge` and `nonce` are arguments rather than generated
+ * inside, because the caller has to persist the values that match them —
+ * generating any of them here would hide half a pair inside a pure function.
+ *
+ * `nonce` is optional and omitted from the URL when absent, rather than sent
+ * empty. An empty `nonce` claim fails a client's comparison instead of skipping
+ * it, so a blank one is worse than none at all.
  */
 export function buildAuthorizeUrl(
   config: ResolvedConfig,
   state: string,
-  codeChallenge: string
+  codeChallenge: string,
+  nonce?: string
 ): string {
   const params = new URLSearchParams({
     response_type: "code",
@@ -87,6 +104,7 @@ export function buildAuthorizeUrl(
     state,
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
+    ...(nonce ? { nonce } : {}),
     ...config.extraParams,
   });
   return `${config.oauthUrl}/api/oauth/authorize?${params.toString()}`;
@@ -105,7 +123,10 @@ export function readCallback(
   search: string,
   storedState: string | null,
   storedVerifier: string | null,
-  redirectUri: string
+  redirectUri: string,
+  // Last, and optional, so the four-argument calls that predate nonce support
+  // keep compiling and keep meaning what they meant.
+  storedNonce?: string | null
 ): SarvCallbackResult | SarvCallbackError {
   const params = new URLSearchParams(search);
   const error = params.get("error");
@@ -133,7 +154,88 @@ export function readCallback(
         "happens when the flow starts in one tab and finishes in another.",
     };
   }
-  return { code, state, codeVerifier: storedVerifier, redirectUri };
+  return {
+    code,
+    state,
+    codeVerifier: storedVerifier,
+    redirectUri,
+    // Absent when the flow did not ask for `openid`, so there is no ID token to
+    // check it against. Undefined rather than null: it is "not applicable", and
+    // the type says optional.
+    ...(storedNonce ? { nonce: storedNonce } : {}),
+  };
+}
+
+/**
+ * Reads a JWT's payload. **DOES NOT VERIFY THE SIGNATURE.**
+ *
+ * That is not a shortcut, it is the boundary of what a browser can usefully do.
+ * Verifying would mean fetching JWKS and doing RSA in the page, and a browser
+ * that verified an ID token itself would still be trusting a token it was
+ * handed. Use this to READ claims you already trust the source of — the ID
+ * token in a token-endpoint response over TLS — and never to decide whether to
+ * trust a token that arrived some other way. That decision belongs on a server,
+ * against the JWKS document.
+ *
+ * Returns null for anything that is not a three-part JWT with a JSON object
+ * payload, so a caller never has to guard the parse.
+ */
+export function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split(".");
+  // Both checks earn their place: the length rejects a two- or four-segment
+  // string, and the destructuring is what narrows the segment to `string` for
+  // the compiler (`noUncheckedIndexedAccess` is on, so `parts[1]` alone stays
+  // `string | undefined` however the length is tested).
+  if (parts.length !== 3) return null;
+  const [, encodedPayload] = parts;
+  if (!encodedPayload) return null;
+  try {
+    const base64 = encodedPayload.replace(/-/g, "+").replace(/_/g, "/");
+    const binary = atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4));
+    // Through TextDecoder rather than using atob's output directly: atob yields
+    // one char per byte, so a claim like a name with a non-ASCII character
+    // would come out as mojibake. Nonces are base64url and would survive
+    // either way; the other claims a caller reads with this would not.
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder().decode(bytes));
+    return payload && typeof payload === "object" && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Checks an ID token's `nonce` against the one this flow sent. Returns a
+ * human-readable problem, or null when it matches.
+ *
+ * A missing ID token is NOT a problem here: a client can legitimately be given
+ * only an access token — the server mints an ID token for the `openid` scope,
+ * and a caller may have narrowed its scopes since the flow began. A missing or
+ * mismatched *claim* on a token that does exist is a problem, and both are
+ * reported distinctly, because they mean different things: one is a server that
+ * did not echo the value, the other is a token minted for a different login.
+ */
+export function nonceProblem(idToken: string | undefined, expected: string): string | null {
+  if (!idToken) return null;
+  const payload = decodeJwtPayload(idToken);
+  if (!payload) return "the id_token in the token response could not be decoded.";
+  const claim = payload.nonce;
+  if (typeof claim !== "string" || !claim) {
+    return (
+      "the id_token has no `nonce` claim, but this flow sent one. Either the " +
+      "authorization server did not echo it, or this token was minted for a " +
+      "different request."
+    );
+  }
+  if (claim !== expected) {
+    return (
+      "the id_token's `nonce` does not match the value stored when this flow " +
+      "started. The token was minted for a different login and must not be trusted."
+    );
+  }
+  return null;
 }
 
 /** True when a result from `readCallback` / `handleCallback` is the error shape. */
@@ -163,16 +265,22 @@ export class SarvLoginClient {
     this.store = store ?? memoryOrSession();
   }
 
-  /** Mints a verifier and state, stores them, and returns where to go next. */
+  /** Mints a verifier, state and nonce, stores them, and returns where to go next. */
   async createAuthorizeUrl(): Promise<string> {
     const verifier = randomVerifier();
     const state = randomState();
+    // Only with `openid`. Without that scope no ID token is minted, so a nonce
+    // would be a value sent, stored and returned that nothing could ever be
+    // compared against — which reads like a guard while being none.
+    const nonce = this.config.scopes.includes("openid") ? randomNonce() : undefined;
     const challenge = await deriveChallenge(verifier);
     // Stored BEFORE the URL is handed out: if the caller navigates the instant
     // it resolves, the verifier has to already be there.
     this.store.setItem(VERIFIER_KEY, verifier);
     this.store.setItem(STATE_KEY, state);
-    return buildAuthorizeUrl(this.config, state, challenge);
+    if (nonce) this.store.setItem(NONCE_KEY, nonce);
+    else this.store.removeItem(NONCE_KEY);
+    return buildAuthorizeUrl(this.config, state, challenge, nonce);
   }
 
   /**
@@ -194,13 +302,16 @@ export class SarvLoginClient {
       query,
       this.store.getItem(STATE_KEY),
       this.store.getItem(VERIFIER_KEY),
-      this.config.redirectUri
+      this.config.redirectUri,
+      this.store.getItem(NONCE_KEY)
     );
     // Cleared whatever the outcome. The verifier is single-use by definition,
     // and leaving it behind is what makes a stale one get paired with a fresh
-    // code later.
+    // code later. The nonce goes with it: it is already on the result, and a
+    // leftover one would be compared against a later flow's ID token.
     this.store.removeItem(STATE_KEY);
     this.store.removeItem(VERIFIER_KEY);
+    this.store.removeItem(NONCE_KEY);
     return result;
   }
 
@@ -239,7 +350,17 @@ export class SarvLoginClient {
         `Sarv login: token exchange failed (${response.status}). ${detail.slice(0, 300)}`
       );
     }
-    return (await response.json()) as SarvTokenResponse;
+    const tokens = (await response.json()) as SarvTokenResponse;
+    // Checked here rather than left to the caller. A nonce that is generated,
+    // sent and returned but never compared is not a weaker guard than none — it
+    // is no guard at all, wearing the appearance of one, and every caller who
+    // forgot the comparison would believe they had it. So the one path where
+    // this SDK holds the ID token itself does the check unprompted, and throws.
+    if (result.nonce) {
+      const problem = nonceProblem(tokens.id_token, result.nonce);
+      if (problem) throw new Error(`Sarv login: ${problem}`);
+    }
+    return tokens;
   }
 
   /** The OIDC userinfo endpoint, for the profile behind an access token. */

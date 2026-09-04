@@ -40,6 +40,18 @@ export interface SarvCallbackResult {
   codeVerifier: string;
   /** The same redirect URI, which the token request must repeat verbatim. */
   redirectUri: string;
+  /**
+   * The OIDC nonce this flow sent, if it sent one — present whenever `openid`
+   * is among the scopes, absent otherwise.
+   *
+   * YOU MUST COMPARE IT. Whoever ends up holding the ID token has to check that
+   * its `nonce` claim equals this value, and refuse the token if it does not.
+   * `exchangeCode()` does that for you, because it holds the token itself. If
+   * your BACKEND does the exchange, send this along with the code and verifier
+   * and compare it there — a nonce that is sent and never checked is not a
+   * weaker guard, it is no guard at all.
+   */
+  nonce?: string;
 }
 
 /** What the token endpoint returns. Snake_case because it is the wire format. */

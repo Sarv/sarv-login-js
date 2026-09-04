@@ -37,6 +37,25 @@ export function randomState(random: (n: number) => Uint8Array = randomBytes): st
 }
 
 /**
+ * The OIDC `nonce`: 16 random bytes, same size and reasoning as `state`.
+ *
+ * Not a secret and not a PKCE value — it is a receipt. The client sends it with
+ * the authorization request, the server copies it into the ID token verbatim,
+ * and the client compares the two. It only has to be unguessable by whoever
+ * would supply a substitute ID token, and it never leaves the browser except in
+ * a URL, exactly like `state`.
+ *
+ * `state` and `nonce` are separate values on purpose, even though both are
+ * random and per-flow. `state` travels back in the callback URL in the clear;
+ * `nonce` travels back inside the ID token. Reusing one value for both would
+ * put the ID-token guard in browser history and in every proxy log that saw the
+ * redirect.
+ */
+export function randomNonce(random: (n: number) => Uint8Array = randomBytes): string {
+  return base64url(random(16));
+}
+
+/**
  * S256 challenge: base64url(SHA-256(verifier)).
  *
  * `plain` is deliberately not implemented. OAuth 2.1 removed it, and offering
