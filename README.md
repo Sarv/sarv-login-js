@@ -10,11 +10,14 @@
 [![license](https://img.shields.io/npm/l/@sarv-in/login?color=6B7691)](LICENSE)
 
 The official **Login with Sarv** button, and the OAuth 2.1 + PKCE client
-behind it. One dependency-free package for plain HTML, vanilla JS and React.
+behind it. One dependency-free package for plain HTML, vanilla JS, React, Vue
+and Angular.
 
 - **One renderer.** The button is a custom element, `<sarv-login-button>`. The
-  React component and `renderButton()` are thin wrappers over it, so every
-  integration looks identical.
+  React, Vue and Angular entry points and `renderButton()` are thin wrappers
+  over it, so every integration looks identical — and Svelte, Solid, Astro or
+  anything else that renders HTML can use the element directly today, with no
+  wrapper at all.
 - **Shadow DOM.** Your CSS reset, your `button {}` rule and your Tailwind
   preflight cannot reshape it — and it cannot leak styles into your page.
 - **Sarv's own design system.** Colours, radius, focus ring, motion and the
@@ -167,6 +170,105 @@ export function Callback() {
 Server components: the component is a client component (it renders a custom
 element and registers it in an effect). In Next.js App Router put `"use client"`
 at the top of the file that imports it.
+
+### Vue
+
+```vue
+<script setup lang="ts">
+import { SarvLoginButton } from "@sarv-in/login/vue";
+
+const config = {
+  clientId: import.meta.env.VITE_SARV_CLIENT_ID,
+  redirectUri: `${window.location.origin}/callback`,
+};
+</script>
+
+<template>
+  <SarvLoginButton v-bind="config" size="lg" @sarv-login="onBeforeRedirect" />
+</template>
+```
+
+`@sarv-login` needs no `emits` declaration and no prop: the component renders a
+single custom element, so Vue's attribute fallthrough puts your listener
+straight onto it. Call `event.preventDefault()` in the handler to cancel the
+redirect.
+
+The callback page uses the composable:
+
+```vue
+<script setup lang="ts">
+import { onMounted } from "vue";
+import { useSarvLogin } from "@sarv-in/login/vue";
+
+const { handleCallback } = useSarvLogin(config);
+onMounted(() => {
+  const result = handleCallback();
+  if (!("error" in result)) postToYourBackend(result);
+});
+</script>
+```
+
+No `compilerOptions.isCustomElement` needed. The component is a render function
+rather than a template, so `<sarv-login-button>` never passes through Vue's
+template compiler and there is nothing to configure. Nuxt: the module is
+SSR-safe — it registers the element on mount, not at import.
+
+### Angular
+
+```ts
+import { CUSTOM_ELEMENTS_SCHEMA, Component } from "@angular/core";
+import { provideSarvLogin, SarvLoginService } from "@sarv-in/login/angular";
+
+// main.ts — one instance for the app
+bootstrapApplication(AppComponent, {
+  providers: [
+    provideSarvLogin({
+      clientId: environment.sarvClientId,
+      redirectUri: `${location.origin}/callback`,
+    }),
+  ],
+});
+
+@Component({
+  selector: "app-sign-in",
+  standalone: true,
+  schemas: [CUSTOM_ELEMENTS_SCHEMA], // teaches Angular the dashed tag
+  template: `
+    <sarv-login-button
+      [attr.client-id]="clientId"
+      [attr.redirect-uri]="redirectUri"
+      size="lg"
+      (sarv-login)="onBeforeRedirect($event)"
+    ></sarv-login-button>
+  `,
+})
+export class SignInComponent {
+  constructor(private sarv: SarvLoginService) {}   // registers the element
+  signInImperatively() { return this.sarv.login(); }
+}
+```
+
+`(sarv-login)` is Angular's ordinary DOM event binding — nothing about it is
+special-cased for custom elements. If you would rather not declare
+`CUSTOM_ELEMENTS_SCHEMA`, `sarv.mount(ref.nativeElement)` renders the same
+button into an `ElementRef` instead.
+
+The callback route:
+
+```ts
+const result = this.sarv.handleCallback();
+if (!isCallbackError(result)) this.api.completeLogin(result);
+```
+
+**This entry point imports nothing from `@angular/core`** — not even a type.
+That is deliberate. An Angular library containing a decorated class has to be
+compiled by `ngtsc` into partial-Ivy format or a consumer's AOT build rejects
+it, which would mean shipping ng-packagr and a `@angular/core` peer range to
+bump on every Angular major. `SarvLoginService` is an undecorated class, and
+Angular's DI takes a class as a token whether or not it carries `@Injectable`,
+so you get real dependency injection with no version coupling at all. The
+practical consequence: this package cannot be the reason your Angular upgrade
+stalls.
 
 ### Vanilla JS, imperatively
 
@@ -759,6 +861,15 @@ it: the custom element is mounted, clicked and read back, and the React wrapper
 is rendered both through `react-dom/server` for the prop-to-attribute mapping
 and through `createRoot` for the effects, the ref and the listener cleanup.
 That is what a synthetic DOM is good for - what the button *does*.
+
+The Vue wrapper is split across two files for a reason worth knowing if you add
+to them: `vue/runtime-dom` captures `document` once at module load, so a process
+that has a DOM cannot prove the no-DOM path and one that has none cannot mount.
+`vue-ssr.test.mjs` runs with no DOM at all — its import is itself the SSR
+assertion — and `vue.test.mjs` installs one first. The Angular suite uses no
+Angular: the entry point ships an undecorated class and a plain provider object,
+so the tests call the factory the way Angular's injector would and assert the
+build stays free of decorator metadata.
 
 It is not what the button *looks like*, and no coverage number will ever say
 anything about that. Appearance is verified separately, in real Chromium, by

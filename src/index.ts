@@ -1,9 +1,13 @@
 /**
  * @sarv-in/login — the "Login with Sarv" button and the PKCE flow behind it.
  *
- * Two ways in, one implementation:
+ * Four ways in, one implementation — every one of them renders the same
+ * `<sarv-login-button>` custom element:
  *   - `<sarv-login-button>` / `renderButton()` for plain HTML and JS
- *   - `@sarv-in/login/react` for React, which renders the same element
+ *   - `@sarv-in/login/react` for React
+ *   - `@sarv-in/login/vue` for Vue 3
+ *   - `@sarv-in/login/angular` for Angular — a service and a provider, no
+ *     Angular import anywhere in it, so no ng-packagr and no version coupling
  *
  * The IIFE build attaches `window.SarvLogin` (and `window.SarvAuth` for pages
  * written against the 1.x SDK), and registers the custom element on load so a

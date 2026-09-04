@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Vue 3 support**, at `@sarv-in/login/vue`: a `SarvLoginButton` component and a
+  `useSarvLogin()` composable, rendering the same custom element as every other
+  entry point. `@sarv-login` works with no `emits` declaration and no prop — the
+  component has a single root element, so Vue's attribute fallthrough puts the
+  listener on it — and `event.preventDefault()` in the handler still cancels the
+  redirect. A parent's `ref` reaches the ELEMENT, for an imperative `login()`.
+  The component is a render function rather than a template on purpose: it means
+  `<sarv-login-button>` never passes through Vue's compiler, so no host needs
+  `compilerOptions.isCustomElement` to use it. SSR-safe for Nuxt — the element is
+  registered on mount, not at import.
+- **Angular support**, at `@sarv-in/login/angular`: a `SarvLoginService` wrapping
+  the flow, and `provideSarvLogin(config)` for any `providers` array. Injecting
+  the service registers the custom element, so a template can use
+  `<sarv-login-button (sarv-login)="...">` with `CUSTOM_ELEMENTS_SCHEMA` — or
+  `service.mount(ref.nativeElement)` to keep the tag out of the template
+  entirely.
+  **The entry point imports nothing from `@angular/core`, not even a type.** An
+  Angular library with a decorated class must be compiled by `ngtsc` into
+  partial-Ivy format or a consumer's AOT build rejects it, which would mean
+  shipping ng-packagr and a `@angular/core` peer range to bump every Angular
+  major. An undecorated class is still a valid DI token, so the injection is
+  real and the version coupling is nil — this package cannot stall an Angular
+  upgrade.
 - **OIDC `nonce` support.** `createAuthorizeUrl()` now mints a nonce alongside
   the verifier and state whenever `openid` is among the scopes, sends it with the
   authorization request, and `handleCallback()` returns it on the result. It is
