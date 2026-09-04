@@ -289,6 +289,7 @@ with no process.
 | Message | Cause |
 |---|---|
 | `401 Unauthorized` from `npm whoami` | the token in `~/.npmrc` expired; `npm login` again |
+| `ENEEDAUTH` from the publish workflow | CI has no credential at all: the `npm` environment holds no `NPM_TOKEN` *and* the package has no Trusted Publisher configured. The build, the tag check and the registry check all pass first, so the log looks healthy right up to the last line. Do [step 3](#3-let-ci-publish), then **Actions > publish > Run workflow** on the same tag |
 | `402 Payment Required` | scoped package published without `--access public` |
 | `403 Forbidden` | the account does not own the `@sarv-in` scope, or the version already exists — versions are immutable, bump instead |
 | `404` on a package you just published | it went to the internal registry; check for a scope-to-registry line, and that `publishConfig.registry` is still in `package.json` |
