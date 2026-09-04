@@ -207,12 +207,19 @@ the old literal. The repo is kept in step too, by a `version` lifecycle hook
 that `npm version` runs before it commits:
 
 ```json
-"version": "npm run gen:version && git add src/index.ts"
+"version": "npm run build && git add src/index.ts README.md"
 ```
 
-So the literal is rewritten and staged *inside* the version commit, and the
-tagged commit passes its own test suite. Nothing to remember and nothing to
-commit afterwards.
+It builds rather than just running `gen:version` because `postbuild` also
+rewrites the CDN snippets in `README.md` — the version pin and the `integrity`
+hash, which is a hash of `dist/sarv-login.min.js` and so cannot be computed
+before tsup runs. Both files are therefore rewritten and staged *inside* the
+version commit: the tagged commit passes its own test suite, and the README
+people read at the tag pins the version that tag publishes. Nothing to remember
+and nothing to commit afterwards.
+
+If the build fails, `npm version` stops before it commits — so a broken tree
+cannot become a tag.
 
 ### Sync the self-hosted copy
 
@@ -249,13 +256,18 @@ Three rules for the URLs that go in the docs:
 - **Pin the exact version. Never `@latest`.** This is a login button on somebody
   else's page. `@latest` means every release changes every host site
   simultaneously, with no deploy on their side to correlate a breakage with.
-- **Publish an SRI hash beside each pinned URL.** After a release:
+- **Publish an SRI hash beside each pinned URL.** `postbuild` does this for
+  `README.md` — `scripts/sync-cdn-pins.mjs` writes the version pin and the
+  `sha384-` hash of the freshly built bundle, and CI fails if the README and the
+  build disagree — so there is nothing to do by hand. To verify a published
+  release against what the CDN actually serves:
   ```bash
   curl -s https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.0/dist/sarv-login.min.js \
     | openssl dgst -sha384 -binary | openssl base64 -A
   ```
-  then `integrity="sha384-..." crossorigin="anonymous"`. SRI only works against
-  an exact version, which is the same reason as above.
+  It matches the local build because npm serves the tarball's files byte for
+  byte. SRI only works against an exact version, which is the same reason as
+  above.
 - **jsDelivr's `/gh/` path does not work for this package.** `dist/` is
   gitignored, so there is no built file in the repo to serve. npm is the only
   source. (CI enforces the other half of this: `gen:logo` must produce no diff,

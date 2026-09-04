@@ -38,6 +38,16 @@ jobs:
           npm run gen:logo
           git diff --exit-code src/logo.generated.ts
 
+      - name: the README's CDN snippets must match this build
+        # The version pin and the integrity hash in the copy-paste <script> tag
+        # are generated from package.json and dist/. A dirty README here means
+        # the snippet a reader would copy does not describe what this tree
+        # builds - either the bump landed without a rebuild, or the bytes
+        # changed without a bump.
+        run: |
+          npm run gen:cdn
+          git diff --exit-code README.md
+
   # Coverage runs once, on the newest Node, rather than in the matrix: the
   # number is a property of the test suite, not of the runtime, and node's
   # coverage threshold flags only exist from 22.8 onwards.

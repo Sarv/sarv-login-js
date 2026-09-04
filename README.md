@@ -64,7 +64,7 @@ npm install @sarv-in/login
 ```html
 <script
   src="https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.0/dist/sarv-login.min.js"
-  integrity="sha384-mCXp3KveOj2R6Z8xU4GXstQn/9cA95o7wd1xlLIZAmaKQdJSih0YKzfC+q+cm3SO"
+  integrity="sha384-VazkiAXGwRU8wLLWiRVzbsJKpQXacDQU9lSW66+NsbEmaDNgr+i7yCahgYjpZBiR"
   crossorigin="anonymous"
 ></script>
 
@@ -88,7 +88,7 @@ any release is reproducible from the published tarball:
 ```bash
 curl -sL https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.0/dist/sarv-login.min.js \
   | openssl dgst -sha384 -binary | openssl base64 -A
-# mCXp3KveOj2R6Z8xU4GXstQn/9cA95o7wd1xlLIZAmaKQdJSih0YKzfC+q+cm3SO
+# VazkiAXGwRU8wLLWiRVzbsJKpQXacDQU9lSW66+NsbEmaDNgr+i7yCahgYjpZBiR
 ```
 
 Self-hosted alternative, on the same origin as the authorization server — for
@@ -117,7 +117,7 @@ On your callback page:
 ```html
 <script
   src="https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.0/dist/sarv-login.min.js"
-  integrity="sha384-mCXp3KveOj2R6Z8xU4GXstQn/9cA95o7wd1xlLIZAmaKQdJSih0YKzfC+q+cm3SO"
+  integrity="sha384-VazkiAXGwRU8wLLWiRVzbsJKpQXacDQU9lSW66+NsbEmaDNgr+i7yCahgYjpZBiR"
   crossorigin="anonymous"
 ></script>
 <script>

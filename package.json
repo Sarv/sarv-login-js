@@ -74,14 +74,16 @@
   "scripts": {
     "gen:logo": "node scripts/gen-logo.mjs",
     "gen:version": "node scripts/sync-version.mjs",
+    "gen:cdn": "node scripts/sync-cdn-pins.mjs",
     "sync:sdk": "node scripts/sync-sdk.mjs",
     "prebuild": "npm run gen:logo && npm run gen:version",
     "build": "tsup",
+    "postbuild": "npm run gen:cdn",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.mjs",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=97 --test-coverage-branches=90 --test-coverage-functions=95 test/*.test.mjs",
     "check": "npm run typecheck && npm run build && npm test",
-    "version": "npm run gen:version && git add src/index.ts",
+    "version": "npm run build && git add src/index.ts README.md",
     "prepublishOnly": "npm run check"
   },
   "peerDependencies": {
