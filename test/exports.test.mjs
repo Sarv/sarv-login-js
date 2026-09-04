@@ -1,8 +1,8 @@
 /**
  * What the published entry points actually expose.
  *
- * package.json promises `.` and `./react`; nothing else in the suite would
- * notice if a rename left one of them exporting half its API.
+ * package.json promises `.`, `./react`, `./vue` and `./angular`; nothing else in
+ * the suite would notice if a rename left one of them exporting half its API.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -55,6 +55,29 @@ test("the react entry loads and exports its component and hook", async () => {
   assert.equal(typeof react.useSarvLogin, "function");
 });
 
+test("the vue entry loads and exports its component and composable", async () => {
+  const vue = await import("../dist/vue.js");
+  // defineComponent returns an options object, not a function.
+  assert.equal(typeof vue.SarvLoginButton, "object");
+  assert.equal(vue.SarvLoginButton.name, "SarvLoginButton");
+  assert.equal(typeof vue.useSarvLogin, "function");
+});
+
+test("the angular entry loads, and its service survives Angular Universal", async () => {
+  const ng = await import("../dist/angular.js");
+  assert.equal(typeof ng.SarvLoginService, "function");
+  assert.equal(typeof ng.provideSarvLogin, "function");
+
+  // This file has no DOM, which is the server render in miniature. Angular
+  // Universal runs the provider factory there, so constructing the service must
+  // not reach for `customElements` or `sessionStorage`.
+  assert.equal(typeof globalThis.window, "undefined");
+  const service = ng.provideSarvLogin({ clientId: "demo", redirectUri: "https://a.example/cb" })
+    .useFactory();
+  assert.equal(service.client.config.clientId, "demo");
+  assert.equal(typeof service.logoutUrl(), "string", "a URL is buildable with no DOM at all");
+});
+
 test("the CDN bundle is a single self-contained script", async () => {
   const iife = readFileSync(new URL("../dist/sarv-login.min.js", import.meta.url), "utf8");
   // No import/require left in it: a <script src> has no module loader.
@@ -70,4 +93,13 @@ test("package.json points the CDN fields at that bundle", () => {
   assert.equal(pkg.jsdelivr, "./dist/sarv-login.min.js");
   assert.equal(pkg.exports["."].types, "./dist/index.d.ts");
   assert.equal(pkg.exports["./react"].import, "./dist/react.js");
+  assert.equal(pkg.exports["./vue"].import, "./dist/vue.js");
+  assert.equal(pkg.exports["./angular"].import, "./dist/angular.js");
+  // Every framework entry stays optional: a plain-JS install must not be told
+  // it is missing a peer it will never import.
+  for (const framework of ["react", "vue"]) {
+    assert.ok(pkg.peerDependencies[framework], `${framework} must be a declared peer`);
+    assert.equal(pkg.peerDependenciesMeta[framework].optional, true);
+  }
+  assert.ok(!("@angular/core" in (pkg.peerDependencies ?? {})), "the angular entry imports no Angular");
 });
