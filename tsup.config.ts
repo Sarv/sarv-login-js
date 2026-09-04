@@ -8,6 +8,7 @@ export default defineConfig([
       index: "src/index.ts",
       react: "src/react.ts",
       vue: "src/vue.ts",
+      angular: "src/angular.ts",
     },
     format: ["esm", "cjs"],
     dts: true,
@@ -15,7 +16,8 @@ export default defineConfig([
     clean: true,
     target: "es2020",
     // Frameworks are peers, never bundled: two Reacts (or two Vues) on one
-    // page is a broken app.
+    // page is a broken app. `angular` needs no entry here — it imports nothing
+    // from @angular/core, by design.
     external: ["react", "vue"],
   },
   {

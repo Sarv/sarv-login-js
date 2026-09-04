@@ -13,6 +13,7 @@
     "sign-in",
     "react",
     "vue",
+    "angular",
     "web-component"
   ],
   "license": "MIT",
@@ -46,6 +47,11 @@
       "types": "./dist/vue.d.ts",
       "import": "./dist/vue.js",
       "require": "./dist/vue.cjs"
+    },
+    "./angular": {
+      "types": "./dist/angular.d.ts",
+      "import": "./dist/angular.js",
+      "require": "./dist/angular.cjs"
     },
     "./dist/sarv-login.min.js": "./dist/sarv-login.min.js",
     "./package.json": "./package.json"
