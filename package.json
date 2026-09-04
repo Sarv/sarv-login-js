@@ -12,6 +12,7 @@
     "sso",
     "sign-in",
     "react",
+    "vue",
     "web-component"
   ],
   "license": "MIT",
@@ -40,6 +41,11 @@
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js",
       "require": "./dist/react.cjs"
+    },
+    "./vue": {
+      "types": "./dist/vue.d.ts",
+      "import": "./dist/vue.js",
+      "require": "./dist/vue.cjs"
     },
     "./dist/sarv-login.min.js": "./dist/sarv-login.min.js",
     "./package.json": "./package.json"
@@ -71,10 +77,14 @@
     "prepublishOnly": "npm run check"
   },
   "peerDependencies": {
-    "react": ">=17.0.0"
+    "react": ">=17.0.0",
+    "vue": ">=3.3.0"
   },
   "peerDependenciesMeta": {
     "react": {
+      "optional": true
+    },
+    "vue": {
       "optional": true
     }
   },
@@ -86,7 +96,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.2.8",
     "tsup": "^8.3.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vue": "^3.5.0"
   },
   "publishConfig": {
     "access": "public",

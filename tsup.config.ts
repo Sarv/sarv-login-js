@@ -4,14 +4,19 @@ export default defineConfig([
   {
     // The package build: ESM first, CJS alongside it because plenty of Node
     // toolchains still `require()`, and .d.ts because the whole API is typed.
-    entry: { index: "src/index.ts", react: "src/react.ts" },
+    entry: {
+      index: "src/index.ts",
+      react: "src/react.ts",
+      vue: "src/vue.ts",
+    },
     format: ["esm", "cjs"],
     dts: true,
     sourcemap: true,
     clean: true,
     target: "es2020",
-    // React is a peer, never bundled: two Reacts on one page is a broken app.
-    external: ["react"],
+    // Frameworks are peers, never bundled: two Reacts (or two Vues) on one
+    // page is a broken app.
+    external: ["react", "vue"],
   },
   {
     // The CDN build: one file, one global, no imports. This is what a plain

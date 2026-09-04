@@ -26,6 +26,10 @@ const BROWSER_GLOBALS = [
   "customElements",
   "HTMLElement",
   "Element",
+  // Vue's runtime-dom reads both to decide an element's namespace at mount
+  // time. Absent, `app.mount()` throws before any of our code runs.
+  "SVGElement",
+  "MathMLElement",
   "Node",
   "Event",
   "CustomEvent",
