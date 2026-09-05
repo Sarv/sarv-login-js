@@ -234,6 +234,18 @@ every release — a stale copy serves an older button than the registry does, an
 that divergence is invisible until somebody reports a bug that was fixed weeks
 ago.
 
+It also rewrites `PINNED` in the developer docs' `npm-release.ts`, the
+version/hash pair that page falls back to when it cannot reach npm. Same
+reasoning as the README: the release that changes the bundle is the release
+that has to change the pin, so nothing about the pair is typed by hand any
+more. Both files land in the oauth repo, so **commit them there** — this script
+writes across a repo boundary and cannot commit for you.
+
+Run it from a tree that has just been built, since the hash is of `dist/`. If
+the docs page is missing (an older checkout, a branch without it) the copy
+still happens and the script warns; if the declaration has been renamed it
+fails loudly rather than leaving the pin behind.
+
 ---
 
 ## The CDNs
