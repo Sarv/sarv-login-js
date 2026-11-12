@@ -20,6 +20,7 @@ export {
   decodeJwtPayload,
   DEFAULT_OAUTH_URL,
   DEFAULT_SCOPES,
+  ID_TOKEN_KEY,
   isCallbackError,
   NONCE_KEY,
   nonceProblem,

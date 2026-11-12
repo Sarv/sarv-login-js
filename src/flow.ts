@@ -27,6 +27,11 @@ export const STATE_KEY = "sarv_oauth_state";
  *  bundle swap simply has no nonce to check — which `readCallback` treats as
  *  "not requested" rather than as a failure. */
 export const NONCE_KEY = "sarv_oidc_nonce";
+/** The ID token from the last browser-side `exchangeCode`, kept only so
+ *  `logout()` can send it as `id_token_hint`. With the hint the server ends the
+ *  session at once; without it, it asks the user to confirm first (OIDC
+ *  RP-Initiated Logout §2). It is not a credential: no API accepts it. */
+export const ID_TOKEN_KEY = "sarv_id_token";
 
 /** Parameters this SDK owns. A caller's `extraParams` may not set them: quietly
  *  letting one through would either break PKCE or, worse, disable the CSRF
@@ -361,6 +366,10 @@ export class SarvLoginClient {
       const problem = nonceProblem(tokens.id_token, result.nonce);
       if (problem) throw new Error(`Sarv login: ${problem}`);
     }
+    // Replaced on every exchange, and dropped when this one minted none, so a
+    // later sign-out never names a user from an earlier sign-in.
+    if (tokens.id_token) this.store.setItem(ID_TOKEN_KEY, tokens.id_token);
+    else this.store.removeItem(ID_TOKEN_KEY);
     return tokens;
   }
 
@@ -421,6 +430,9 @@ export class SarvLoginClient {
    * document — `{"message":"Signed out of Sarv OAuth"}` — in the browser
    * window. Raw JSON shown to a user who clicked "sign out" is the failure this
    * prevents.
+   *
+   * `id_token_hint` is the one given, else the ID token kept by `exchangeCode`.
+   * It is what lets the server sign the user out without a confirmation page.
    */
   buildLogoutUrl(options: SarvLogoutOptions = {}): string {
     const params = new URLSearchParams({
@@ -429,7 +441,8 @@ export class SarvLoginClient {
         options.postLogoutRedirectUri ?? defaultPostLogoutUri(this.config.redirectUri),
     });
     if (options.state) params.set("state", options.state);
-    if (options.idTokenHint) params.set("id_token_hint", options.idTokenHint);
+    const idTokenHint = options.idTokenHint ?? this.store.getItem(ID_TOKEN_KEY);
+    if (idTokenHint) params.set("id_token_hint", idTokenHint);
     return `${this.config.oauthUrl}/api/oauth/logout?${params.toString()}`;
   }
 
@@ -464,7 +477,10 @@ export class SarvLoginClient {
     this.store.removeItem(STATE_KEY);
     this.store.removeItem(VERIFIER_KEY);
     this.store.removeItem(NONCE_KEY);
-    globalThis.location?.assign(this.buildLogoutUrl(options));
+    // Built before the ID token is forgotten, since the URL carries it.
+    const logoutUrl = this.buildLogoutUrl(options);
+    this.store.removeItem(ID_TOKEN_KEY);
+    globalThis.location?.assign(logoutUrl);
   }
 }
 

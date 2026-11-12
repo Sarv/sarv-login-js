@@ -96,12 +96,12 @@ export interface SarvLogoutOptions {
   /** Opaque value echoed back as `?state=` on the landing page. */
   state?: string;
   /**
-   * Advisory. The spec has the RP pass its ID token so the IdP can tell which
-   * session to end; this server accepts the parameter but does not act on it,
-   * because it ends the session it finds from the session cookie — which a
-   * top-level navigation to the logout endpoint carries anyway. Kept in the
-   * signature: it is a legitimate parameter, and code written against it stops
-   * needing a change the day the server starts honouring it.
+   * The ID token issued at sign-in. The server signs the user out at once when
+   * it names the signed-in user; without it, the server shows a confirmation
+   * page first, so a link on another site cannot sign people out.
+   *
+   * Defaults to the ID token `exchangeCode` kept. Pass it yourself when your
+   * backend did the exchange and holds the ID token.
    */
   idTokenHint?: string;
   /**

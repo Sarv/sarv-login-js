@@ -9,7 +9,7 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SarvLoginClient, STATE_KEY, VERIFIER_KEY } from "../dist/index.js";
+import { ID_TOKEN_KEY, SarvLoginClient, STATE_KEY, VERIFIER_KEY } from "../dist/index.js";
 
 const CONFIG = {
   clientId: "demo",
@@ -273,4 +273,59 @@ test("a success with an unparseable body counts as nothing revoked", async () =>
     () => client.revokeToken("t")
   );
   assert.equal(result, false);
+});
+
+// ── id_token_hint ────────────────────────────────────────────────────────
+// Without a hint naming the signed-in user the server shows a confirmation
+// page before signing out (OIDC RP-Initiated Logout §2). These pin that the SDK
+// sends the ID token it holds, and never one from an earlier sign-in.
+
+const CALLBACK = {
+  code: "the-code",
+  codeVerifier: "v".repeat(43),
+  redirectUri: CONFIG.redirectUri,
+  state: "s",
+};
+
+test("logout sends the ID token from exchangeCode as id_token_hint, then forgets it", async () => {
+  const store = memoryStore();
+  const client = new SarvLoginClient(CONFIG, store);
+  const { navigations } = await withBrowser(
+    [response({ body: { access_token: "at", id_token: "the-id-token" } })],
+    async () => {
+      await client.exchangeCode(CALLBACK);
+      await client.logout();
+    }
+  );
+  assert.equal(new URL(navigations[0]).searchParams.get("id_token_hint"), "the-id-token");
+  assert.equal(store.has(ID_TOKEN_KEY), false, "a later sign-out must not reuse it");
+});
+
+test("an idTokenHint passed in wins over the kept one", async () => {
+  const client = new SarvLoginClient(CONFIG, memoryStore({ [ID_TOKEN_KEY]: "kept" }));
+  const url = new URL(client.buildLogoutUrl({ idTokenHint: "from-the-backend" }));
+  assert.equal(url.searchParams.get("id_token_hint"), "from-the-backend");
+});
+
+test("buildLogoutUrl uses the kept ID token without consuming it", async () => {
+  const store = memoryStore({ [ID_TOKEN_KEY]: "kept" });
+  const client = new SarvLoginClient(CONFIG, store);
+  assert.equal(new URL(client.buildLogoutUrl()).searchParams.get("id_token_hint"), "kept");
+  assert.equal(store.has(ID_TOKEN_KEY), true);
+});
+
+test("an exchange that mints no ID token drops one kept from before", async () => {
+  const store = memoryStore({ [ID_TOKEN_KEY]: "earlier-user" });
+  const client = new SarvLoginClient(CONFIG, store);
+  await withBrowser([response({ body: { access_token: "at" } })], () => client.exchangeCode(CALLBACK));
+  assert.equal(store.has(ID_TOKEN_KEY), false);
+});
+
+test("a failed exchange keeps nothing", async () => {
+  const store = memoryStore();
+  const client = new SarvLoginClient(CONFIG, store);
+  await withBrowser([response({ ok: false, status: 400, body: { error: "invalid_grant" } })], () =>
+    assert.rejects(() => client.exchangeCode(CALLBACK), /token exchange failed \(400\)/)
+  );
+  assert.equal(store.has(ID_TOKEN_KEY), false);
 });
