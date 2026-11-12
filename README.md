@@ -63,8 +63,8 @@ npm install @sarv-in/login
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.1/dist/sarv-login.min.js"
-  integrity="sha384-aXu/NK0iQ1oqc9D+2cvaw/YEQ+vymzgSTzDiqMcuNeqPcDrbZcZ5LjBM8FIQrIkA"
+  src="https://cdn.jsdelivr.net/npm/@sarv-in/login@1.1.0/dist/sarv-login.min.js"
+  integrity="sha384-8pGiW1Yas7EemKk7I/LvmBQuzAvoxwluqiz7hgeAoOmMl5bwqE+FwDnCarXCUDb4"
   crossorigin="anonymous"
 ></script>
 
@@ -82,13 +82,13 @@ without you shipping anything, and without the hash a compromised CDN could
 serve a button that redirects elsewhere.
 
 unpkg serves the identical bytes, so the same hash works there:
-`https://unpkg.com/@sarv-in/login@1.0.1/dist/sarv-login.min.js`. The hash for
+`https://unpkg.com/@sarv-in/login@1.1.0/dist/sarv-login.min.js`. The hash for
 any release is reproducible from the published tarball:
 
 ```bash
-curl -sL https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.1/dist/sarv-login.min.js \
+curl -sL https://cdn.jsdelivr.net/npm/@sarv-in/login@1.1.0/dist/sarv-login.min.js \
   | openssl dgst -sha384 -binary | openssl base64 -A
-# aXu/NK0iQ1oqc9D+2cvaw/YEQ+vymzgSTzDiqMcuNeqPcDrbZcZ5LjBM8FIQrIkA
+# 8pGiW1Yas7EemKk7I/LvmBQuzAvoxwluqiz7hgeAoOmMl5bwqE+FwDnCarXCUDb4
 ```
 
 Self-hosted alternative, on the same origin as the authorization server — for
@@ -116,8 +116,8 @@ On your callback page:
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/npm/@sarv-in/login@1.0.1/dist/sarv-login.min.js"
-  integrity="sha384-aXu/NK0iQ1oqc9D+2cvaw/YEQ+vymzgSTzDiqMcuNeqPcDrbZcZ5LjBM8FIQrIkA"
+  src="https://cdn.jsdelivr.net/npm/@sarv-in/login@1.1.0/dist/sarv-login.min.js"
+  integrity="sha384-8pGiW1Yas7EemKk7I/LvmBQuzAvoxwluqiz7hgeAoOmMl5bwqE+FwDnCarXCUDb4"
   crossorigin="anonymous"
 ></script>
 <script>
