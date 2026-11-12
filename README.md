@@ -484,11 +484,22 @@ stranding them on a page that still looks signed in because one network call
 failed is worse than a token that outlives its session and expires on its own.
 Failures go to `console.error`.
 
+**The ID token goes along as `id_token_hint`.** It proves the sign-out comes
+from the signed-in user's own app, so Sarv ends the session straight away.
+Without it, Sarv first shows the user a "Sign out of Sarv?" page and waits for
+them to confirm, because otherwise any website could sign people out with a
+link. The hint may have expired; only its signature is checked.
+
+`exchangeCode()` keeps the `id_token` in session storage for exactly this, and
+`logout()` sends it and then forgets it. When your backend did the exchange, the
+browser never saw the ID token, so pass it yourself as `idTokenHint`. A Sarv
+server before 1.4.0 ignores the hint and signs out without asking either way.
+
 | Option                  | Default                        | Notes |
 | ----------------------- | ------------------------------ | ----- |
 | `postLogoutRedirectUri` | the **origin** of `redirectUri` | Validated against the origins of your registered redirect URIs, so any path on a registered origin is accepted |
 | `state`                 | —                              | Opaque, echoed back on the landing page |
-| `idTokenHint`           | —                              | Accepted, not acted on; see [ID tokens](#id-tokens) |
+| `idTokenHint`           | the `id_token` `exchangeCode()` kept | Lets Sarv sign out without asking the user to confirm. Pass it when your backend holds the ID token; see [ID tokens](#id-tokens) |
 | `tokens`                | none                           | `{ accessToken?, refreshToken? }` |
 
 Both `client_id` and `post_logout_redirect_uri` are always sent, whatever you
@@ -538,7 +549,7 @@ work behind your own routes:
 ported from another provider: Sarv requires `code_challenge` at `/authorize` and
 `code_verifier` at `/token` from **every** client, confidential ones included. A
 server that sends only `client_id` + `client_secret` + `code` gets
-`400 {"detail":"Missing required parameters for authorization_code grant"}`.
+`400 invalid_request` ("Missing required parameters for authorization_code grant").
 Generate the verifier on the server, keep it in the session, send it back at
 exchange time.
 
@@ -584,7 +595,7 @@ app.get("/auth/sarv/callback", async (req, res, next) => {
 
     const response = await fetch(`${OAUTH}/api/oauth/token`, {
       method: "POST",
-      // JSON, not form encoding - see The wire protocol below.
+      // JSON works on every Sarv server; form encoding needs 1.4.0 or later.
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         grant_type: "authorization_code",
@@ -621,7 +632,7 @@ app.get("/auth/sarv/callback", async (req, res, next) => {
 // 5. Sign out: revoke, drop your session, then end the Sarv session.
 app.get("/auth/sarv/logout", async (req, res, next) => {
   try {
-    const { access_token, refresh_token } = req.session.tokens ?? {};
+    const { access_token, refresh_token, id_token } = req.session.tokens ?? {};
     for (const [token, hint] of [[refresh_token, "refresh_token"], [access_token, "access_token"]]) {
       if (!token) continue;
       await fetch(`${OAUTH}/api/oauth/revoke`, {
@@ -634,6 +645,8 @@ app.get("/auth/sarv/logout", async (req, res, next) => {
       const params = new URLSearchParams({
         client_id: CLIENT_ID,
         post_logout_redirect_uri: "https://app.example.com/signed-out",
+        // Skips Sarv's "Sign out of Sarv?" confirmation page.
+        ...(id_token ? { id_token_hint: id_token } : {}),
       });
       res.redirect(`${OAUTH}/api/oauth/logout?${params}`);
     });
@@ -671,31 +684,45 @@ GET /.well-known/jwks.json
 | Endpoint | Method | Body | Authentication | Rate limit |
 | -------- | ------ | ---- | -------------- | ---------- |
 | `/api/oauth/authorize` | GET | query string | — | 20/min |
-| `/api/oauth/token` | POST | **JSON** | PKCE, plus `client_secret` if confidential | 20/min |
+| `/api/oauth/token` | POST | form or JSON | PKCE, plus the client secret if confidential (body or HTTP Basic) | 20/min |
 | `/api/oauth/userinfo` | GET | — | `Authorization: Bearer` | 30/min |
-| `/api/oauth/revoke` | POST | **JSON** | the token itself, plus `client_secret` if confidential | 10/min |
-| `/api/oauth/introspect` | POST | **JSON** | as revoke | 30/min |
-| `/api/oauth/logout` | GET | query string | `client_id` + `post_logout_redirect_uri` | 20/min |
+| `/api/oauth/revoke` | POST | form or JSON | the token itself, plus the client secret if confidential | 10/min |
+| `/api/oauth/introspect` | POST | form or JSON | as revoke; a public client sees only its own tokens | 30/min |
+| `/api/oauth/logout` | GET | query string | `client_id` + `post_logout_redirect_uri`; `id_token_hint` to skip the confirmation page | 20/min |
 
 Limits are per IP, and a `429` is a rate limit rather than anything about your
 credentials.
 
-### Two deviations worth knowing before you write the client
+### Request bodies and errors
 
-**1. The token endpoint takes JSON.** RFC 6749 says
-`application/x-www-form-urlencoded`; this server parses a JSON body. Most OAuth
-libraries form-encode by default and will fail here — check yours, or make the
-call by hand as in the recipe above.
+Server release 1.4.0 made `/token`, `/revoke` and `/introspect` standard, so a
+stock OAuth library works without an adapter:
 
-**2. Errors are `{"detail": "..."}`.** Not the RFC's
-`{"error": "...", "error_description": "..."}` — the OpenAPI schema advertises
-that shape but the running code answers with FastAPI's, so branch on the HTTP
-status and treat `detail` as human-readable text, never as a machine code:
+**Bodies are form or JSON.** `application/x-www-form-urlencoded` (RFC 6749
+§4.1.3) and JSON are both accepted. A parameter sent twice is refused. Before
+1.4.0 only JSON was accepted, which is why this package still sends JSON: it
+works against every release.
+
+**Confidential clients may use HTTP Basic** (`client_secret_basic`) instead of
+`client_secret` in the body, but not both at once.
+
+**Errors follow RFC 6749 §5.2,** with the old `detail` text kept beside them,
+so code that read `detail` keeps working. Branch on `error`, never on the text:
 
 ```json
-400 {"detail": "Missing required parameters for authorization_code grant"}
-401 {"detail": "Invalid client credentials"}
+400 {"error": "invalid_request", "error_description": "Missing required parameters for authorization_code grant", "detail": "..."}
+401 {"error": "invalid_client", "error_description": "Invalid client credentials", "detail": "..."}
 ```
+
+| Problem | Status and `error` |
+| ------- | ------------------ |
+| Bad client credentials | 401 `invalid_client`, with `WWW-Authenticate: Basic` when Basic was used |
+| Bad, used or expired code or refresh token | 400 `invalid_grant` |
+| Unknown `grant_type` | 400 `unsupported_grant_type` (was 422) |
+| Malformed or missing parameters | 400 `invalid_request` (was 422) |
+
+Before 1.4.0, errors were FastAPI's `{"detail": "..."}` alone and some were
+422. Code that branches on the status should treat any 4xx as a failed call.
 
 ### Authorization request
 
@@ -709,6 +736,8 @@ status and treat `detail` as human-readable text, never as a machine code:
 | `code_challenge` | yes | 43-128 characters, for every client type |
 | `code_challenge_method` | yes | `S256`; `plain` is rejected |
 | `nonce` | no | Echoed into the `id_token` verbatim, up to 255 characters. Survives the consent screen and the KYC verification detour. Omit it rather than sending it empty |
+| `prompt` | no | 1.4.0+. `none` (never show a page: answer `login_required`, `consent_required` or `interaction_required`), `login` (sign in again), `select_account` (sign in again, possibly as someone else), `consent` (show the consent screen). Space separated; `none` cannot be combined |
+| `max_age` | no | 1.4.0+. Seconds. A sign-in older than this is asked to sign in again; the ID token's `auth_time` says when it happened |
 
 ### Token response
 
@@ -777,8 +806,9 @@ libraries — NextAuth's `openid` provider, Spring Security's OIDC login,
 `passport-openidconnect` — work against it.
 
 **An ID token is not a credential.** It is a signed statement to *you* that a
-user just authenticated, meant to be read once and discarded. Never send it to
-an API as a bearer token, and if you build an API, never accept one:
+user just authenticated. Read it once, then keep it only as the hint for
+sign-out. Never send it to an API as a bearer token, and if you build an API,
+never accept one:
 
 - Access tokens carry `typ: "at+jwt"` in the header; ID tokens carry `typ: "JWT"`.
 - Access tokens carry a `scope` claim. **ID tokens deliberately carry none**, so
@@ -788,9 +818,15 @@ Both are signed by the same key with the same `iss` and the same `aud`, so a
 signature check alone does not tell them apart. Those two differences are what
 does.
 
-`id_token_hint` at the logout endpoint is still accepted and not acted on: the
-server ends the session it finds from the session cookie, which is the session
-a top-level navigation to the logout endpoint carries anyway.
+**Send it back as `id_token_hint` when you sign the user out.** The logout
+endpoint ends the session at once when there is no session, or when the hint is
+an ID token Sarv signed for the user who is signed in. Expired hints are fine;
+only the signature and issuer are checked. Otherwise it sends the browser to a
+"Sign out of Sarv?" page first (OpenID Connect RP-Initiated Logout §2), so a
+link on some other site cannot sign anyone out. When the hint names a client,
+it can stand in for `client_id`; if you send both, they must name the same
+client or the redirect back to you is dropped. An access token is not accepted
+as a hint.
 
 ### Scopes
 
