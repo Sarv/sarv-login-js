@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`logout()` sends the ID token as `id_token_hint` by default.** `exchangeCode()`
+  now keeps the `id_token` in session storage, and `logout()` sends it, then
+  forgets it. From Sarv server 1.4.0, a sign-out without a hint naming the
+  signed-in user shows a "Sign out of Sarv?" confirmation page first; with the
+  hint it ends the session at once, as before. An `idTokenHint` you pass still
+  wins, which is what to do when your backend did the exchange. Older servers
+  ignore the hint, so nothing changes against them.
+
 ## [1.0.1] - 2026-09-04
 
 ### Added
